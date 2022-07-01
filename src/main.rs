@@ -4,7 +4,7 @@ use crossterm::{
     cursor::{MoveTo, Hide, Show},
     event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
     queue,
-    terminal::{self, Clear, ClearType},
+    terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen}, execute,
 };
 use errno::errno;
 
@@ -60,6 +60,7 @@ fn clear_screen<W: io::Write>(writer: &mut W) -> crossterm::Result<()> {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     terminal::enable_raw_mode()?;
+    execute!(io::stdout(), EnterAlternateScreen)?;
 
     let editor = setup_editor()?;
 
@@ -73,6 +74,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    execute!(io::stdout(), LeaveAlternateScreen)?;
     terminal::disable_raw_mode()?;
 
     Ok(())
