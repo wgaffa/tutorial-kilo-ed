@@ -27,37 +27,47 @@ impl ScreenSize {
     }
 }
 
-/// Tuple index .0 == x, .1 == y
 #[derive(Debug, Clone, Copy, Default)]
-pub struct Position(u16, u16);
+pub struct Position {
+    x: u16,
+    y: u16,
+    bounds: (u16, u16),
+}
 
 impl Position {
     pub fn new(x: u16, y: u16) -> Self {
-        Self(x, y)
+        Self { x, y, bounds: Default::default() }
+    }
+
+    pub fn with_bounds(self, cols: u16, rows: u16) -> Self {
+        Self {
+            bounds: (cols - 1, rows - 1),
+            ..self
+        }
     }
 
     pub fn x(&self) -> u16 {
-        self.0
+        self.x
     }
 
     pub fn y(&self) -> u16 {
-        self.1
+        self.y
     }
 
     pub fn up(&mut self) {
-        self.1 -= 1;
+        self.y = self.y.saturating_sub(1);
     }
 
     pub fn down(&mut self) {
-        self.1 += 1;
+        self.y = (self.y + 1).clamp(0, self.bounds.1);
     }
 
     pub fn left(&mut self) {
-        self.0 -= 1;
+        self.x = self.x.saturating_sub(1);
     }
 
     pub fn right(&mut self) {
-        self.0 += 1;
+        self.x = (self.x + 1).clamp(0, self.bounds.0);
     }
 }
 
@@ -71,7 +81,7 @@ impl Editor {
     pub fn new(cols: u16, rows: u16) -> Self {
         Self {
             size: ScreenSize::new(cols, rows),
-            cursor: Position::default(),
+            cursor: Position::default().with_bounds(cols, rows),
         }
     }
 
