@@ -8,6 +8,8 @@ use crossterm::{
 };
 use errno::errno;
 
+use kilo_edit::Editor;
+
 macro_rules! match_key {
     ( $code:pat , $modifier:pat ) => {
         Event::Key(KeyEvent {
@@ -30,21 +32,24 @@ fn refresh_screen() -> crossterm::Result<()> {
     let mut stdout = io::stdout();
     queue!(stdout, Clear(ClearType::All), MoveTo(0, 0))?;
 
+    Editor::draw_rows(&mut stdout)?;
+    queue!(stdout, MoveTo(0, 0))?;
+
     stdout.flush()?;
 
     Ok(())
 }
 
-fn die(message: &str) -> crossterm::Result<()> {
+fn die(message: &str) -> ! {
     let mut stdout = io::stdout();
-    clear_screen(&mut stdout)?;
+    let _ = clear_screen(&mut stdout);
 
-    terminal::disable_raw_mode()?;
+    let _ = terminal::disable_raw_mode();
 
     let errno = errno();
     eprintln!("{message}: {errno}");
 
-    Ok(())
+    std::process::exit(1);
 }
 
 fn clear_screen<W: io::Write>(writer: &mut W) -> crossterm::Result<()> {
@@ -59,7 +64,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         if refresh_screen().is_err() {
             die("unable to refresh screen");
-            break;
         }
 
         if !process_key() {
