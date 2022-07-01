@@ -134,13 +134,7 @@ impl Editor {
 
     pub fn open<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
         let content = fs::read_to_string(path)?;
-
-        let lines = content.lines().map(String::from).collect::<Vec<_>>();
-
-        if lines.len() > 0 {
-            self.rows.push(lines[0].clone());
-        }
-
+        self.rows = content.lines().map(String::from).collect();
         Ok(())
     }
 
