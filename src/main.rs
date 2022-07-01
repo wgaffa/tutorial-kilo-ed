@@ -1,16 +1,32 @@
-use std::io::{self, Read};
+use crossterm::{
+    event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
+    terminal,
+};
 
-use crossterm::terminal;
+macro_rules! match_key {
+    ( $code:pat , $modifier:pat ) => {
+        Event::Key(KeyEvent {
+            code: $code,
+            modifiers: $modifier,
+        })
+    }
+}
+
+fn process_key() -> bool {
+    match event::read() {
+        Ok(match_key!(KeyCode::Char('q'), KeyModifiers::CONTROL)) => return false,
+        _ => {}
+    }
+
+    true
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     terminal::enable_raw_mode()?;
 
-    for byte in io::stdin().bytes() {
-        match byte {
-            Ok(b'q') => break,
-            Ok(c) if c.is_ascii_control() => print!("{c}\r\n"),
-            Ok(c) => print!("{c} ('{}')\r\n", c as char),
-            _ => {},
+    loop {
+        if !process_key() {
+            break;
         }
     }
 
