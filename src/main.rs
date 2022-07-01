@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 
 use crossterm::{
-    cursor::MoveTo,
+    cursor::{MoveTo, Hide, Show},
     event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
     queue,
     terminal::{self, Clear, ClearType},
@@ -28,12 +28,12 @@ fn process_key() -> bool {
     true
 }
 
-fn refresh_screen() -> crossterm::Result<()> {
+fn refresh_screen(editor: &Editor) -> crossterm::Result<()> {
     let mut stdout = io::stdout();
-    queue!(stdout, Clear(ClearType::All), MoveTo(0, 0))?;
+    queue!(stdout, Clear(ClearType::All), MoveTo(0, 0), Hide)?;
 
-    Editor::draw_rows(&mut stdout)?;
-    queue!(stdout, MoveTo(0, 0))?;
+    editor.draw_rows(&mut stdout)?;
+    queue!(stdout, MoveTo(0, 0), Show)?;
 
     stdout.flush()?;
 
@@ -61,8 +61,10 @@ fn clear_screen<W: io::Write>(writer: &mut W) -> crossterm::Result<()> {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     terminal::enable_raw_mode()?;
 
+    let editor = setup_editor()?;
+
     loop {
-        if refresh_screen().is_err() {
+        if refresh_screen(&editor).is_err() {
             die("unable to refresh screen");
         }
 
@@ -74,4 +76,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     terminal::disable_raw_mode()?;
 
     Ok(())
+}
+
+fn setup_editor() -> crossterm::Result<Editor> {
+    let (cols, rows) = terminal::size()?;
+
+    Ok(Editor::new(cols, rows))
 }
