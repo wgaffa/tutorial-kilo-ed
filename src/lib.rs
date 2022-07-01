@@ -36,7 +36,11 @@ pub struct Position {
 
 impl Position {
     pub fn new(x: u16, y: u16) -> Self {
-        Self { x, y, bounds: Default::default() }
+        Self {
+            x,
+            y,
+            bounds: Default::default(),
+        }
     }
 
     pub fn with_bounds(self, cols: u16, rows: u16) -> Self {
@@ -130,10 +134,28 @@ impl Editor {
         match event::read() {
             Ok(match_key!(KeyCode::Char('q'), KeyModifiers::CONTROL)) => return false,
             Ok(key!(ch)) if matches!(ch, 'a' | 'w' | 'd' | 's') => self.move_cursor(ch),
+            Ok(Event::Key(KeyEvent { code, .. }))
+                if matches!(
+                    code,
+                    KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down
+                ) =>
+            {
+                self.move_cursor(Self::map_key(code).expect("Could not handle incorrect keycode"));
+            }
             _ => {}
         }
 
         true
+    }
+
+    fn map_key(key: KeyCode) -> Option<char> {
+        match key {
+            KeyCode::Left => Some('a'),
+            KeyCode::Right => Some('d'),
+            KeyCode::Up => Some('w'),
+            KeyCode::Down => Some('s'),
+            _ => None,
+        }
     }
 
     fn padding(&self, message_len: u16) -> String {
