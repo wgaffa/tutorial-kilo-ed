@@ -1,6 +1,6 @@
 use std::{
     fmt,
-    io::{self, Write},
+    io::{self, Write}, path::Path, fs,
 };
 
 use crossterm::{
@@ -132,8 +132,16 @@ impl Editor {
         true
     }
 
-    pub fn open(&mut self) {
-        self.rows.push(String::from("Hello, World"));
+    pub fn open<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
+        let content = fs::read_to_string(path)?;
+
+        let lines = content.lines().map(String::from).collect::<Vec<_>>();
+
+        if lines.len() > 0 {
+            self.rows.push(lines[0].clone());
+        }
+
+        Ok(())
     }
 
     fn map_key(key: KeyCode) -> Option<CursorMovement> {

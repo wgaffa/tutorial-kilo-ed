@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, env, path::PathBuf};
 
 use crossterm::{
     cursor::MoveTo,
@@ -32,7 +32,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     execute!(io::stdout(), EnterAlternateScreen)?;
 
     let mut editor = setup_editor()?;
-    editor.open();
+    let args = env::args().collect::<Vec<_>>();
+    if args.len() >= 2 {
+        editor.open(&args[1])?;
+    }
 
     loop {
         if editor.refresh(&mut io::stdout()).is_err() {
