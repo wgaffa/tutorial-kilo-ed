@@ -1,4 +1,4 @@
-use std::{io, env, path::PathBuf};
+use std::{io, env};
 
 use crossterm::{
     cursor::MoveTo,

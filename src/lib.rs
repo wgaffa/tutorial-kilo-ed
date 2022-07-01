@@ -51,7 +51,7 @@ impl Editor {
     pub fn draw_rows<W: Write>(&self, writer: &mut W) -> io::Result<()> {
         for i in 0..self.size.rows() {
             if i >= self.rows.len() as u16 {
-                if i == (self.size.rows() / 3) {
+                if self.rows.is_empty() && i == (self.size.rows() / 3) {
                     let message = self.message();
                     let padding = self.padding(message.len() as u16);
 
