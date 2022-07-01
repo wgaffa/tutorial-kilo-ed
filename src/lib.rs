@@ -1,4 +1,7 @@
-use std::{io::{self, Write}, fmt};
+use std::{
+    fmt,
+    io::{self, Write},
+};
 
 use crossterm::{
     cursor::{Hide, MoveTo, Show},
@@ -7,7 +10,9 @@ use crossterm::{
     queue,
     terminal::{Clear, ClearType},
 };
+use cursor::CursorMovement;
 
+pub mod cursor;
 pub mod macros;
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -28,64 +33,16 @@ impl ScreenSize {
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-pub struct Position {
-    x: u16,
-    y: u16,
-    bounds: (u16, u16),
-}
-
-impl Position {
-    pub fn new(x: u16, y: u16) -> Self {
-        Self {
-            x,
-            y,
-            bounds: Default::default(),
-        }
-    }
-
-    pub fn with_bounds(self, cols: u16, rows: u16) -> Self {
-        Self {
-            bounds: (cols.saturating_sub(1), rows.saturating_sub(1)),
-            ..self
-        }
-    }
-
-    pub fn x(&self) -> u16 {
-        self.x
-    }
-
-    pub fn y(&self) -> u16 {
-        self.y
-    }
-
-    pub fn up(&mut self) {
-        self.y = self.y.saturating_sub(1);
-    }
-
-    pub fn down(&mut self) {
-        self.y = (self.y + 1).clamp(0, self.bounds.1);
-    }
-
-    pub fn left(&mut self) {
-        self.x = self.x.saturating_sub(1);
-    }
-
-    pub fn right(&mut self) {
-        self.x = (self.x + 1).clamp(0, self.bounds.0);
-    }
-}
-
-#[derive(Debug, Clone, Copy, Default)]
 pub struct Editor {
     size: ScreenSize,
-    cursor: Position,
+    cursor: cursor::Position,
 }
 
 impl Editor {
     pub fn new(cols: u16, rows: u16) -> Self {
         Self {
             size: ScreenSize::new(cols, rows),
-            cursor: Position::default().with_bounds(cols, rows),
+            cursor: cursor::Position::default().with_bounds(cols, rows),
         }
     }
 
@@ -120,24 +77,44 @@ impl Editor {
         Ok(())
     }
 
-    pub fn move_cursor(&mut self, key: char) {
+    pub fn move_cursor(&mut self, key: CursorMovement) {
         match key {
-            'a' => self.cursor.left(),
-            'd' => self.cursor.right(),
-            'w' => self.cursor.up(),
-            's' => self.cursor.down(),
-            _ => {}
+            CursorMovement::Left => self.cursor.left(),
+            CursorMovement::Right => self.cursor.right(),
+            CursorMovement::Up => self.cursor.up(),
+            CursorMovement::Down => self.cursor.down(),
+            CursorMovement::ScreenTop => {
+                for _ in 0..self.size.rows() {
+                    self.cursor.up()
+                }
+            }
+            CursorMovement::ScreenBottom => {
+                for _ in 0..self.size.rows() {
+                    self.cursor.down()
+                }
+            }
+            CursorMovement::ScreenEnd => self.cursor.far_left(),
+            CursorMovement::ScreenBegin => self.cursor.far_right(),
         }
     }
 
     pub fn process_key(&mut self) -> bool {
         match event::read() {
             Ok(match_key!(KeyCode::Char('q'), KeyModifiers::CONTROL)) => return false,
-            Ok(key!(ch)) if matches!(ch, 'a' | 'w' | 'd' | 's') => self.move_cursor(ch),
+            Ok(key!(ch)) if matches!(ch, 'a' | 'w' | 'd' | 's') => self.move_cursor(
+                Self::map_key(KeyCode::Char(ch)).expect("Could not handle incorrect keycode"),
+            ),
             Ok(Event::Key(KeyEvent { code, .. }))
                 if matches!(
                     code,
-                    KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down
+                    KeyCode::Left
+                        | KeyCode::Right
+                        | KeyCode::Up
+                        | KeyCode::Down
+                        | KeyCode::PageDown
+                        | KeyCode::PageUp
+                        | KeyCode::Home
+                        | KeyCode::End
                 ) =>
             {
                 self.move_cursor(Self::map_key(code).expect("Could not handle incorrect keycode"));
@@ -148,12 +125,20 @@ impl Editor {
         true
     }
 
-    fn map_key(key: KeyCode) -> Option<char> {
+    fn map_key(key: KeyCode) -> Option<CursorMovement> {
         match key {
-            KeyCode::Left => Some('a'),
-            KeyCode::Right => Some('d'),
-            KeyCode::Up => Some('w'),
-            KeyCode::Down => Some('s'),
+            KeyCode::Left => Some(CursorMovement::Left),
+            KeyCode::Right => Some(CursorMovement::Right),
+            KeyCode::Up => Some(CursorMovement::Up),
+            KeyCode::Down => Some(CursorMovement::Down),
+            KeyCode::Char('a') => Some(CursorMovement::Left),
+            KeyCode::Char('d') => Some(CursorMovement::Right),
+            KeyCode::Char('w') => Some(CursorMovement::Up),
+            KeyCode::Char('s') => Some(CursorMovement::Down),
+            KeyCode::PageUp => Some(CursorMovement::ScreenTop),
+            KeyCode::PageDown => Some(CursorMovement::ScreenBottom),
+            KeyCode::End => Some(CursorMovement::ScreenBegin),
+            KeyCode::Home => Some(CursorMovement::ScreenEnd),
             _ => None,
         }
     }
