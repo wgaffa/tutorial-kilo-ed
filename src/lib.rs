@@ -1,4 +1,4 @@
-use std::io::{self, Write};
+use std::{io::{self, Write}, fmt};
 
 use crossterm::{
     cursor::{Hide, MoveTo, Show},
@@ -45,7 +45,7 @@ impl Position {
 
     pub fn with_bounds(self, cols: u16, rows: u16) -> Self {
         Self {
-            bounds: (cols - 1, rows - 1),
+            bounds: (cols.saturating_sub(1), rows.saturating_sub(1)),
             ..self
         }
     }
@@ -95,7 +95,7 @@ impl Editor {
                 let message = self.message();
                 let padding = self.padding(message.len() as u16);
 
-                write!(writer, "{}", padding + &message)?;
+                write!(writer, "{}{}", padding, &message)?;
             } else {
                 write!(writer, "~")?;
             }
@@ -158,25 +158,41 @@ impl Editor {
         }
     }
 
-    fn padding(&self, message_len: u16) -> String {
-        let mut padding = String::new();
+    fn padding(&self, message_len: u16) -> Padding {
         let pad_size = (self.size.cols() - message_len) / 2;
-        if pad_size > 0 {
-            padding.push('~');
-        }
-
-        padding += &" ".repeat(pad_size.saturating_sub(1) as usize);
-        padding
+        Padding::new('~', pad_size as usize)
     }
 
-    fn message(&self) -> String {
-        let mut message = format!("Kilo editor -- version {}", version!());
+    fn message(&self) -> &str {
+        let message = concat!("Kilo editor -- version ", version!());
 
         if message.len() > self.size.cols() as usize {
-            message.truncate(self.size.cols() as usize);
+            &message[..self.size.cols() as usize]
+        } else {
+            message
         }
+    }
+}
 
-        message
+#[derive(Debug, Clone, Copy)]
+pub struct Padding {
+    leading: char,
+    size: usize,
+}
+
+impl Padding {
+    pub fn new(leading: char, size: usize) -> Self {
+        Self { leading, size }
+    }
+}
+
+impl fmt::Display for Padding {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.size > 0 {
+            write!(f, "{:<size$}", self.leading, size = self.size)
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -258,9 +274,6 @@ mod tests {
 
         let expected = top + &message + &bottom;
         let expected = expected.trim_end().as_bytes().to_vec();
-
-        println!("({cols}, {rows}) output: {:?}", output);
-        println!("({cols}, {rows}) expected: {:?}", expected);
 
         expected == output
     }
