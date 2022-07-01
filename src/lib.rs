@@ -7,25 +7,49 @@ use crossterm::{
 
 pub mod macros;
 
-pub struct ScreenSize {
-    cols: u16,
-    rows: u16,
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ScreenSize(u16, u16);
+
+impl ScreenSize {
+    pub fn new(cols: u16, rows: u16) -> Self {
+        Self(cols, rows)
+    }
+
+    pub fn cols(&self) -> u16 {
+        self.0
+    }
+
+    pub fn rows(&self) -> u16 {
+        self.1
+    }
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Position(u16, u16);
+
+impl Position {
+    pub fn new(x: u16, y: u16) -> Self {
+        Self(x, y)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Editor {
     size: ScreenSize,
+    cursor: Position,
 }
 
 impl Editor {
     pub fn new(cols: u16, rows: u16) -> Self {
         Self {
-            size: ScreenSize { cols, rows },
+            size: ScreenSize::new(cols, rows),
+            cursor: Position::default(),
         }
     }
 
     pub fn draw_rows<W: Write>(&self, writer: &mut W) -> io::Result<()> {
-        for i in 0..self.size.rows {
-            if i == (self.size.rows / 3) {
+        for i in 0..self.size.rows() {
+            if i == (self.size.rows() / 3) {
                 let message = self.message();
                 let padding = self.padding(message.len() as u16);
 
@@ -35,7 +59,7 @@ impl Editor {
             }
 
             queue!(writer, Clear(ClearType::UntilNewLine))?;
-            if i < self.size.rows - 1 {
+            if i < self.size.rows() - 1 {
                 write!(writer, "\r\n")?;
             }
         }
@@ -45,7 +69,7 @@ impl Editor {
 
     fn padding(&self, message_len: u16) -> String {
         let mut padding = String::new();
-        let pad_size = (self.size.cols - message_len) / 2;
+        let pad_size = (self.size.cols() - message_len) / 2;
         if pad_size > 0 {
             padding.push('~');
         }
@@ -57,8 +81,8 @@ impl Editor {
     fn message(&self) -> String {
         let mut message = format!("Kilo editor -- version {}", version!());
 
-        if message.len() > self.size.cols as usize {
-            message.truncate(self.size.cols as usize);
+        if message.len() > self.size.cols() as usize {
+            message.truncate(self.size.cols() as usize);
         }
 
         message
