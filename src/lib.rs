@@ -32,10 +32,11 @@ impl ScreenSize {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Editor {
     size: ScreenSize,
     cursor: cursor::Position,
+    rows: Vec<String>,
 }
 
 impl Editor {
@@ -43,18 +44,24 @@ impl Editor {
         Self {
             size: ScreenSize::new(cols, rows),
             cursor: cursor::Position::default().with_bounds(cols, rows),
+            rows: Default::default(),
         }
     }
 
     pub fn draw_rows<W: Write>(&self, writer: &mut W) -> io::Result<()> {
         for i in 0..self.size.rows() {
-            if i == (self.size.rows() / 3) {
-                let message = self.message();
-                let padding = self.padding(message.len() as u16);
+            if i >= self.rows.len() as u16 {
+                if i == (self.size.rows() / 3) {
+                    let message = self.message();
+                    let padding = self.padding(message.len() as u16);
 
-                write!(writer, "{}{}", padding, &message)?;
+                    write!(writer, "{}{}", padding, &message)?;
+                } else {
+                    write!(writer, "~")?;
+                }
             } else {
-                write!(writer, "~")?;
+                let len = self.rows[i as usize].len().clamp(0, self.size.cols() as usize);
+                write!(writer, "{}", &self.rows[i as usize][..len])?;
             }
 
             queue!(writer, Clear(ClearType::UntilNewLine))?;
@@ -123,6 +130,10 @@ impl Editor {
         }
 
         true
+    }
+
+    pub fn open(&mut self) {
+        self.rows.push(String::from("Hello, World"));
     }
 
     fn map_key(key: KeyCode) -> Option<CursorMovement> {

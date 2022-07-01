@@ -32,6 +32,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     execute!(io::stdout(), EnterAlternateScreen)?;
 
     let mut editor = setup_editor()?;
+    editor.open();
 
     loop {
         if editor.refresh(&mut io::stdout()).is_err() {
