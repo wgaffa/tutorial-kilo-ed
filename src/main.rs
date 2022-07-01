@@ -30,7 +30,7 @@ fn process_key() -> bool {
 
 fn refresh_screen(editor: &Editor) -> crossterm::Result<()> {
     let mut stdout = io::stdout();
-    queue!(stdout, Clear(ClearType::All), MoveTo(0, 0), Hide)?;
+    queue!(stdout, MoveTo(0, 0), Hide)?;
 
     editor.draw_rows(&mut stdout)?;
     queue!(stdout, MoveTo(0, 0), Show)?;
