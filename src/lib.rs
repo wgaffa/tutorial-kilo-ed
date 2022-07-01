@@ -1,6 +1,9 @@
 use std::io::{self, Write};
 
 use crossterm::{
+    cursor::{Hide, MoveTo, Show},
+    event,
+    event::{Event, KeyCode, KeyEvent, KeyModifiers},
     queue,
     terminal::{Clear, ClearType},
 };
@@ -24,12 +27,37 @@ impl ScreenSize {
     }
 }
 
+/// Tuple index .0 == x, .1 == y
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Position(u16, u16);
 
 impl Position {
     pub fn new(x: u16, y: u16) -> Self {
         Self(x, y)
+    }
+
+    pub fn x(&self) -> u16 {
+        self.0
+    }
+
+    pub fn y(&self) -> u16 {
+        self.1
+    }
+
+    pub fn up(&mut self) {
+        self.1 -= 1;
+    }
+
+    pub fn down(&mut self) {
+        self.1 += 1;
+    }
+
+    pub fn left(&mut self) {
+        self.0 -= 1;
+    }
+
+    pub fn right(&mut self) {
+        self.0 += 1;
     }
 }
 
@@ -65,6 +93,37 @@ impl Editor {
         }
 
         Ok(())
+    }
+
+    pub fn refresh<W: Write>(&self, writer: &mut W) -> crossterm::Result<()> {
+        queue!(writer, MoveTo(0, 0), Hide)?;
+
+        self.draw_rows(writer)?;
+        queue!(writer, MoveTo(self.cursor.x(), self.cursor.y()), Show)?;
+
+        writer.flush()?;
+
+        Ok(())
+    }
+
+    pub fn move_cursor(&mut self, key: char) {
+        match key {
+            'a' => self.cursor.left(),
+            'd' => self.cursor.right(),
+            'w' => self.cursor.up(),
+            's' => self.cursor.down(),
+            _ => {}
+        }
+    }
+
+    pub fn process_key(&mut self) -> bool {
+        match event::read() {
+            Ok(match_key!(KeyCode::Char('q'), KeyModifiers::CONTROL)) => return false,
+            Ok(key!(ch)) if matches!(ch, 'a' | 'w' | 'd' | 's') => self.move_cursor(ch),
+            _ => {}
+        }
+
+        true
     }
 
     fn padding(&self, message_len: u16) -> String {

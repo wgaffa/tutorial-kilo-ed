@@ -1,44 +1,13 @@
-use std::io::{self, Write};
+use std::io;
 
 use crossterm::{
-    cursor::{MoveTo, Hide, Show},
-    event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
+    cursor::MoveTo,
     queue,
     terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen}, execute,
 };
 use errno::errno;
 
 use kilo_edit::Editor;
-
-macro_rules! match_key {
-    ( $code:pat , $modifier:pat ) => {
-        Event::Key(KeyEvent {
-            code: $code,
-            modifiers: $modifier,
-        })
-    };
-}
-
-fn process_key() -> bool {
-    match event::read() {
-        Ok(match_key!(KeyCode::Char('q'), KeyModifiers::CONTROL)) => return false,
-        _ => {}
-    }
-
-    true
-}
-
-fn refresh_screen(editor: &Editor) -> crossterm::Result<()> {
-    let mut stdout = io::stdout();
-    queue!(stdout, MoveTo(0, 0), Hide)?;
-
-    editor.draw_rows(&mut stdout)?;
-    queue!(stdout, MoveTo(0, 0), Show)?;
-
-    stdout.flush()?;
-
-    Ok(())
-}
 
 fn die(message: &str) -> ! {
     let mut stdout = io::stdout();
@@ -62,14 +31,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     terminal::enable_raw_mode()?;
     execute!(io::stdout(), EnterAlternateScreen)?;
 
-    let editor = setup_editor()?;
+    let mut editor = setup_editor()?;
 
     loop {
-        if refresh_screen(&editor).is_err() {
+        if editor.refresh(&mut io::stdout()).is_err() {
             die("unable to refresh screen");
         }
 
-        if !process_key() {
+        if !editor.process_key() {
             break;
         }
     }
