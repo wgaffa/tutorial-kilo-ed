@@ -1,5 +1,10 @@
 use crate::Position;
 
+pub trait Cursor {
+    fn x(&self) -> u16;
+    fn y(&self) -> u16;
+}
+
 #[non_exhaustive]
 pub enum CursorMovement {
     Up,
@@ -22,14 +27,6 @@ impl BoundedCursor {
         Self {
             position: Position(x, y),
         }
-    }
-
-    pub fn x(&self) -> u16 {
-        self.position.0
-    }
-
-    pub fn y(&self) -> u16 {
-        self.position.1
     }
 
     pub fn up(&mut self) {
@@ -60,4 +57,15 @@ impl BoundedCursor {
         self.position.0 = self.position.0.min(col_bound);
         self.position.1 = self.position.1.min(row_bound);
     }
+}
+
+impl Cursor for BoundedCursor {
+    fn x(&self) -> u16 {
+        self.position.0
+    }
+
+    fn y(&self) -> u16 {
+        self.position.1
+    }
+
 }

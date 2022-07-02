@@ -19,6 +19,7 @@ pub mod macros;
 pub mod screen;
 
 use screen::Screen;
+use cursor::Cursor;
 
 /// The position on screen or buffer. The tuple index represents the horizontal value
 /// x or column while the vertical is y or rows for example.
@@ -27,29 +28,25 @@ pub struct Position(u16, u16);
 
 #[derive(Debug, Clone, Default)]
 pub struct Editor {
-    size: Screen,
+    screen: Screen,
     cursor: cursor::BoundedCursor,
     rows: Vec<String>,
-    row_offset: u16,
-    col_offset: u16,
 }
 
 impl Editor {
     pub fn new(cols: u16, rows: u16) -> Self {
         Self {
-            size: Screen::new(cols, rows),
+            screen: Screen::new(cols, rows),
             cursor: cursor::BoundedCursor::default(),
             rows: Default::default(),
-            row_offset: 0,
-            col_offset: 0,
         }
     }
 
     pub fn draw_rows<W: Write>(&self, writer: &mut W) -> io::Result<()> {
-        for i in 0..self.size.rows() {
-            let file_row = i + self.row_offset;
+        for i in 0..self.screen.rows() {
+            let file_row = i + self.screen.row_offset();
             if file_row >= self.rows.len() as u16 {
-                if self.rows.is_empty() && i == (self.size.rows() / 3) {
+                if self.rows.is_empty() && i == (self.screen.rows() / 3) {
                     let message = self.message();
                     let padding = self.padding(message.len() as u16);
 
@@ -60,21 +57,21 @@ impl Editor {
             } else {
                 let len = self.rows[file_row as usize]
                     .len()
-                    .saturating_sub(self.col_offset as usize)
-                    .min(self.size.cols() as usize);
+                    .saturating_sub(self.screen.col_offset() as usize)
+                    .min(self.screen.cols() as usize);
 
-                if self.rows[file_row as usize].len() >= self.col_offset as usize {
+                if self.rows[file_row as usize].len() >= self.screen.col_offset() as usize {
                     write!(
                         writer,
                         "{}",
                         &self.rows[file_row as usize]
-                            [(self.col_offset as usize)..self.col_offset as usize + len]
+                            [(self.screen.col_offset() as usize)..self.screen.col_offset() as usize + len]
                     )?;
                 }
             }
 
             queue!(writer, Clear(ClearType::UntilNewLine))?;
-            if i < self.size.rows() - 1 {
+            if i < self.screen.rows() - 1 {
                 write!(writer, "\r\n")?;
             }
         }
@@ -83,15 +80,15 @@ impl Editor {
     }
 
     pub fn refresh<W: Write>(&mut self, writer: &mut W) -> crossterm::Result<()> {
-        self.scroll();
+        self.screen.scroll(&self.cursor);
         queue!(writer, MoveTo(0, 0), Hide)?;
 
         self.draw_rows(writer)?;
         queue!(
             writer,
             MoveTo(
-                self.cursor.x() - self.col_offset,
-                self.cursor.y() - self.row_offset
+                self.cursor.x() - self.screen.col_offset(),
+                self.cursor.y() - self.screen.row_offset()
             ),
             Show
         )?;
@@ -101,26 +98,8 @@ impl Editor {
         Ok(())
     }
 
-    fn scroll(&mut self) {
-        if self.cursor.y() < self.row_offset {
-            self.row_offset = self.cursor.y();
-        }
-
-        if self.cursor.y() >= self.row_offset + self.size.rows() {
-            self.row_offset = self.cursor.y() - self.size.rows() + 1;
-        }
-
-        if self.cursor.x() < self.col_offset {
-            self.col_offset = self.cursor.x();
-        }
-
-        if self.cursor.x() >= self.col_offset + self.size.cols() {
-            self.col_offset = self.cursor.x() - self.size.cols() + 1;
-        }
-    }
-
     pub fn move_cursor(&mut self, key: CursorMovement) {
-        let column_bound = if self.cursor.y() >= self.size.rows() {
+        let column_bound = if self.cursor.y() >= self.screen.rows() {
             0
         } else {
             self.rows[self.cursor.y() as usize].len() as u16
@@ -151,16 +130,16 @@ impl Editor {
             CursorMovement::Up => self.cursor.up(),
             CursorMovement::Down => self.cursor.down(rows),
             CursorMovement::ScreenTop => {
-                for _ in 0..self.size.rows() {
+                for _ in 0..self.screen.rows() {
                     self.cursor.up()
                 }
             }
             CursorMovement::ScreenBottom => {
-                for _ in 0..self.size.rows() {
+                for _ in 0..self.screen.rows() {
                     self.cursor.down(rows)
                 }
             }
-            CursorMovement::ScreenEnd => self.cursor.end(self.size.cols()),
+            CursorMovement::ScreenEnd => self.cursor.end(self.screen.cols()),
             CursorMovement::ScreenBegin => self.cursor.begin(),
         }
 
@@ -231,15 +210,15 @@ impl Editor {
     }
 
     fn padding(&self, message_len: u16) -> Padding {
-        let pad_size = (self.size.cols() - message_len) / 2;
+        let pad_size = (self.screen.cols() - message_len) / 2;
         Padding::new('~', pad_size as usize)
     }
 
     fn message(&self) -> &str {
         let message = concat!("Kilo editor -- version ", version!());
 
-        if message.len() > self.size.cols() as usize {
-            &message[..self.size.cols() as usize]
+        if message.len() > self.screen.cols() as usize {
+            &message[..self.screen.cols() as usize]
         } else {
             message
         }
