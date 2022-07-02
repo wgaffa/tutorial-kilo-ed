@@ -17,6 +17,11 @@ use cursor::CursorMovement;
 pub mod cursor;
 pub mod macros;
 
+/// The position on screen or buffer. The tuple index represents the horizontal value
+/// x or column while the vertical is y or rows for example.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Position(u16, u16);
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ScreenSize(u16, u16);
 
@@ -37,7 +42,7 @@ impl ScreenSize {
 #[derive(Debug, Clone, Default)]
 pub struct Editor {
     size: ScreenSize,
-    cursor: cursor::Position,
+    cursor: cursor::BoundedCursor,
     rows: Vec<String>,
     row_offset: u16,
     col_offset: u16,
@@ -47,7 +52,7 @@ impl Editor {
     pub fn new(cols: u16, rows: u16) -> Self {
         Self {
             size: ScreenSize::new(cols, rows),
-            cursor: cursor::Position::default().with_bounds(cols, rows),
+            cursor: cursor::BoundedCursor::default(),
             rows: Default::default(),
             row_offset: 0,
             col_offset: 0,
@@ -129,19 +134,20 @@ impl Editor {
             CursorMovement::Left => self.cursor.left(),
             CursorMovement::Right => self.cursor.right(),
             CursorMovement::Up => self.cursor.up(),
-            CursorMovement::Down => self.cursor.down(),
+            CursorMovement::Down => self.cursor.down(self.rows.len() as u16),
             CursorMovement::ScreenTop => {
                 for _ in 0..self.size.rows() {
                     self.cursor.up()
                 }
             }
             CursorMovement::ScreenBottom => {
+                let rows = self.rows.len() as u16;
                 for _ in 0..self.size.rows() {
-                    self.cursor.down()
+                    self.cursor.down(rows)
                 }
             }
-            CursorMovement::ScreenEnd => self.cursor.far_left(),
-            CursorMovement::ScreenBegin => self.cursor.far_right(),
+            CursorMovement::ScreenEnd => self.cursor.end(self.size.cols()),
+            CursorMovement::ScreenBegin => self.cursor.begin(),
         }
     }
 
@@ -175,9 +181,6 @@ impl Editor {
     pub fn open<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
         let content = fs::read_to_string(path)?;
         self.rows = content.lines().map(String::from).collect();
-        self.cursor = self
-            .cursor
-            .with_bounds(self.size.cols(), self.rows.len() as u16);
         Ok(())
     }
 

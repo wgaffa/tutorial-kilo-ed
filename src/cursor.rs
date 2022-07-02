@@ -1,3 +1,5 @@
+use crate::Position;
+
 #[non_exhaustive]
 pub enum CursorMovement {
     Up,
@@ -11,57 +13,46 @@ pub enum CursorMovement {
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-pub struct Position {
-    x: u16,
-    y: u16,
-    bounds: (u16, u16),
+pub struct BoundedCursor {
+    position: Position,
 }
 
-impl Position {
+impl BoundedCursor {
     pub fn new(x: u16, y: u16) -> Self {
         Self {
-            x,
-            y,
-            bounds: Default::default(),
-        }
-    }
-
-    pub fn with_bounds(self, cols: u16, rows: u16) -> Self {
-        Self {
-            bounds: (cols.saturating_sub(1), rows.saturating_sub(1)),
-            ..self
+            position: Position(x, y),
         }
     }
 
     pub fn x(&self) -> u16 {
-        self.x
+        self.position.0
     }
 
     pub fn y(&self) -> u16 {
-        self.y
+        self.position.1
     }
 
     pub fn up(&mut self) {
-        self.y = self.y.saturating_sub(1);
+        self.position.1 = self.position.1.saturating_sub(1);
     }
 
-    pub fn down(&mut self) {
-        self.y = (self.y + 1).clamp(0, self.bounds.1);
+    pub fn down(&mut self, row_bound: u16) {
+        self.position.1 = self.position.1.saturating_add(1).min(row_bound);
     }
 
     pub fn left(&mut self) {
-        self.x = self.x.saturating_sub(1);
+        self.position.0 = self.position.0.saturating_sub(1);
     }
 
     pub fn right(&mut self) {
-        self.x = self.x.saturating_add(1);
+        self.position.0 = self.position.0.saturating_add(1);
     }
 
-    pub fn far_right(&mut self) {
-        self.x = self.bounds.0;
+    pub fn end(&mut self, col_bound: u16) {
+        self.position.0 = col_bound;
     }
 
-    pub fn far_left(&mut self) {
-        self.x = 0;
+    pub fn begin(&mut self) {
+        self.position.0 = 0;
     }
 }
