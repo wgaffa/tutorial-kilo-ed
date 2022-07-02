@@ -141,8 +141,25 @@ impl Editor {
         };
 
         match key {
-            CursorMovement::Left => self.cursor.left(),
-            CursorMovement::Right => self.cursor.right(column_bound),
+            CursorMovement::Left => {
+                if self.cursor.y() > 0 && self.cursor.x() == 0 {
+                    self.cursor.up();
+                    self.cursor
+                        .end(self.rows[self.cursor.y() as usize].len() as u16)
+                } else {
+                    self.cursor.left()
+                }
+            }
+            CursorMovement::Right => {
+                if self.cursor.y() < self.rows.len() as u16
+                    && self.cursor.x() == self.rows[self.cursor.y() as usize].len() as u16
+                {
+                    self.cursor.down(self.rows.len() as u16);
+                    self.cursor.begin();
+                } else {
+                    self.cursor.right(column_bound)
+                }
+            }
             CursorMovement::Up => self.cursor.up(),
             CursorMovement::Down => self.cursor.down(self.rows.len() as u16),
             CursorMovement::ScreenTop => {
@@ -162,7 +179,12 @@ impl Editor {
 
         let (row_bound, col_bound) = {
             let r = self.cursor.y();
-            let c = self.cursor.x().min(self.rows.get(self.cursor.y() as usize).map(|x| x.len() as u16).unwrap_or(0));
+            let c = self.cursor.x().min(
+                self.rows
+                    .get(self.cursor.y() as usize)
+                    .map(|x| x.len() as u16)
+                    .unwrap_or(0),
+            );
 
             (r, c)
         };
