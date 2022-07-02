@@ -16,32 +16,18 @@ use cursor::CursorMovement;
 
 pub mod cursor;
 pub mod macros;
+pub mod screen;
+
+use screen::Screen;
 
 /// The position on screen or buffer. The tuple index represents the horizontal value
 /// x or column while the vertical is y or rows for example.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Position(u16, u16);
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct ScreenSize(u16, u16);
-
-impl ScreenSize {
-    pub fn new(cols: u16, rows: u16) -> Self {
-        Self(cols, rows)
-    }
-
-    pub fn cols(&self) -> u16 {
-        self.0
-    }
-
-    pub fn rows(&self) -> u16 {
-        self.1
-    }
-}
-
 #[derive(Debug, Clone, Default)]
 pub struct Editor {
-    size: ScreenSize,
+    size: Screen,
     cursor: cursor::BoundedCursor,
     rows: Vec<String>,
     row_offset: u16,
@@ -51,7 +37,7 @@ pub struct Editor {
 impl Editor {
     pub fn new(cols: u16, rows: u16) -> Self {
         Self {
-            size: ScreenSize::new(cols, rows),
+            size: Screen::new(cols, rows),
             cursor: cursor::BoundedCursor::default(),
             rows: Default::default(),
             row_offset: 0,
