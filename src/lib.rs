@@ -37,6 +37,7 @@ pub struct Editor {
     size: ScreenSize,
     cursor: cursor::Position,
     rows: Vec<String>,
+    row_offset: usize,
 }
 
 impl Editor {
@@ -45,12 +46,14 @@ impl Editor {
             size: ScreenSize::new(cols, rows),
             cursor: cursor::Position::default().with_bounds(cols, rows),
             rows: Default::default(),
+            row_offset: 0,
         }
     }
 
     pub fn draw_rows<W: Write>(&self, writer: &mut W) -> io::Result<()> {
         for i in 0..self.size.rows() {
-            if i >= self.rows.len() as u16 {
+            let file_row = i as usize + self.row_offset;
+            if file_row >= self.rows.len() {
                 if self.rows.is_empty() && i == (self.size.rows() / 3) {
                     let message = self.message();
                     let padding = self.padding(message.len() as u16);
@@ -60,8 +63,8 @@ impl Editor {
                     write!(writer, "~")?;
                 }
             } else {
-                let len = self.rows[i as usize].len().clamp(0, self.size.cols() as usize);
-                write!(writer, "{}", &self.rows[i as usize][..len])?;
+                let len = self.rows[file_row as usize].len().clamp(0, self.size.cols() as usize);
+                write!(writer, "{}", &self.rows[file_row as usize][..len])?;
             }
 
             queue!(writer, Clear(ClearType::UntilNewLine))?;
@@ -73,15 +76,26 @@ impl Editor {
         Ok(())
     }
 
-    pub fn refresh<W: Write>(&self, writer: &mut W) -> crossterm::Result<()> {
+    pub fn refresh<W: Write>(&mut self, writer: &mut W) -> crossterm::Result<()> {
+        self.scroll();
         queue!(writer, MoveTo(0, 0), Hide)?;
 
         self.draw_rows(writer)?;
-        queue!(writer, MoveTo(self.cursor.x(), self.cursor.y()), Show)?;
+        queue!(writer, MoveTo(self.cursor.x(), self.cursor.y() - self.row_offset as u16), Show)?;
 
         writer.flush()?;
 
         Ok(())
+    }
+
+    fn scroll(&mut self) {
+        if (self.cursor.y() as usize) < self.row_offset {
+            self.row_offset = self.cursor.y() as usize;
+        }
+
+        if (self.cursor.y() as usize) >= self.row_offset + self.size.rows() as usize {
+            self.row_offset = self.cursor.y() as usize - self.size.rows() as usize + 1;
+        }
     }
 
     pub fn move_cursor(&mut self, key: CursorMovement) {
@@ -135,6 +149,7 @@ impl Editor {
     pub fn open<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
         let content = fs::read_to_string(path)?;
         self.rows = content.lines().map(String::from).collect();
+        self.cursor = self.cursor.with_bounds(self.size.cols(), self.rows.len() as u16);
         Ok(())
     }
 
