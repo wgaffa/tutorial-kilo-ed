@@ -37,7 +37,7 @@ pub struct Editor {
     size: ScreenSize,
     cursor: cursor::Position,
     rows: Vec<String>,
-    row_offset: usize,
+    row_offset: u16,
 }
 
 impl Editor {
@@ -52,8 +52,8 @@ impl Editor {
 
     pub fn draw_rows<W: Write>(&self, writer: &mut W) -> io::Result<()> {
         for i in 0..self.size.rows() {
-            let file_row = i as usize + self.row_offset;
-            if file_row >= self.rows.len() {
+            let file_row = i + self.row_offset;
+            if file_row >= self.rows.len() as u16 {
                 if self.rows.is_empty() && i == (self.size.rows() / 3) {
                     let message = self.message();
                     let padding = self.padding(message.len() as u16);
@@ -81,7 +81,7 @@ impl Editor {
         queue!(writer, MoveTo(0, 0), Hide)?;
 
         self.draw_rows(writer)?;
-        queue!(writer, MoveTo(self.cursor.x(), self.cursor.y() - self.row_offset as u16), Show)?;
+        queue!(writer, MoveTo(self.cursor.x(), self.cursor.y() - self.row_offset), Show)?;
 
         writer.flush()?;
 
@@ -89,12 +89,12 @@ impl Editor {
     }
 
     fn scroll(&mut self) {
-        if (self.cursor.y() as usize) < self.row_offset {
-            self.row_offset = self.cursor.y() as usize;
+        if self.cursor.y() < self.row_offset {
+            self.row_offset = self.cursor.y();
         }
 
-        if (self.cursor.y() as usize) >= self.row_offset + self.size.rows() as usize {
-            self.row_offset = self.cursor.y() as usize - self.size.rows() as usize + 1;
+        if self.cursor.y() >= self.row_offset + self.size.rows() {
+            self.row_offset = self.cursor.y() - self.size.rows() + 1;
         }
     }
 
