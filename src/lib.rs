@@ -81,7 +81,8 @@ impl Editor {
                     write!(
                         writer,
                         "{}",
-                        &self.rows[file_row as usize][(self.col_offset as usize)..self.col_offset as usize + len]
+                        &self.rows[file_row as usize]
+                            [(self.col_offset as usize)..self.col_offset as usize + len]
                     )?;
                 }
             }
@@ -102,7 +103,10 @@ impl Editor {
         self.draw_rows(writer)?;
         queue!(
             writer,
-            MoveTo(self.cursor.x() - self.col_offset, self.cursor.y() - self.row_offset),
+            MoveTo(
+                self.cursor.x() - self.col_offset,
+                self.cursor.y() - self.row_offset
+            ),
             Show
         )?;
 
@@ -130,9 +134,15 @@ impl Editor {
     }
 
     pub fn move_cursor(&mut self, key: CursorMovement) {
+        let column_bound = if self.cursor.y() >= self.size.rows() {
+            0
+        } else {
+            self.rows[self.cursor.y() as usize].len() as u16
+        };
+
         match key {
             CursorMovement::Left => self.cursor.left(),
-            CursorMovement::Right => self.cursor.right(),
+            CursorMovement::Right => self.cursor.right(column_bound),
             CursorMovement::Up => self.cursor.up(),
             CursorMovement::Down => self.cursor.down(self.rows.len() as u16),
             CursorMovement::ScreenTop => {
@@ -149,6 +159,15 @@ impl Editor {
             CursorMovement::ScreenEnd => self.cursor.end(self.size.cols()),
             CursorMovement::ScreenBegin => self.cursor.begin(),
         }
+
+        let (row_bound, col_bound) = {
+            let r = self.cursor.y();
+            let c = self.cursor.x().min(self.rows.get(self.cursor.y() as usize).map(|x| x.len() as u16).unwrap_or(0));
+
+            (r, c)
+        };
+
+        self.cursor.snap(row_bound, col_bound);
     }
 
     pub fn process_key(&mut self) -> bool {
