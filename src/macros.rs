@@ -18,7 +18,9 @@ macro_rules! match_key {
 #[macro_export]
 macro_rules! key {
     ( $bind:ident ) => {
-        Event::Key(KeyEvent{ code: KeyCode::Char($bind) , .. })
-    }
+        Event::Key(KeyEvent {
+            code: KeyCode::Char($bind),
+            ..
+        })
+    };
 }
-

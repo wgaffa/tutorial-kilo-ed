@@ -1,9 +1,10 @@
-use std::{io, env};
+use std::{env, io};
 
 use crossterm::{
     cursor::MoveTo,
+    execute,
     queue,
-    terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen}, execute,
+    terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use errno::errno;
 

@@ -1,6 +1,8 @@
 use std::{
     fmt,
-    io::{self, Write}, path::Path, fs,
+    fs,
+    io::{self, Write},
+    path::Path,
 };
 
 use crossterm::{
@@ -63,7 +65,9 @@ impl Editor {
                     write!(writer, "~")?;
                 }
             } else {
-                let len = self.rows[file_row as usize].len().clamp(0, self.size.cols() as usize);
+                let len = self.rows[file_row as usize]
+                    .len()
+                    .clamp(0, self.size.cols() as usize);
                 write!(writer, "{}", &self.rows[file_row as usize][..len])?;
             }
 
@@ -81,7 +85,11 @@ impl Editor {
         queue!(writer, MoveTo(0, 0), Hide)?;
 
         self.draw_rows(writer)?;
-        queue!(writer, MoveTo(self.cursor.x(), self.cursor.y() - self.row_offset), Show)?;
+        queue!(
+            writer,
+            MoveTo(self.cursor.x(), self.cursor.y() - self.row_offset),
+            Show
+        )?;
 
         writer.flush()?;
 
@@ -149,7 +157,9 @@ impl Editor {
     pub fn open<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
         let content = fs::read_to_string(path)?;
         self.rows = content.lines().map(String::from).collect();
-        self.cursor = self.cursor.with_bounds(self.size.cols(), self.rows.len() as u16);
+        self.cursor = self
+            .cursor
+            .with_bounds(self.size.cols(), self.rows.len() as u16);
         Ok(())
     }
 
