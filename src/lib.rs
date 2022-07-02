@@ -140,6 +140,8 @@ impl Editor {
             self.rows[self.cursor.y() as usize].len() as u16
         };
 
+        let rows = self.rows.len() as u16;
+
         match key {
             CursorMovement::Left => {
                 if self.cursor.y() > 0 && self.cursor.x() == 0 {
@@ -151,24 +153,23 @@ impl Editor {
                 }
             }
             CursorMovement::Right => {
-                if self.cursor.y() < self.rows.len() as u16
+                if self.cursor.y() < rows
                     && self.cursor.x() == self.rows[self.cursor.y() as usize].len() as u16
                 {
-                    self.cursor.down(self.rows.len() as u16);
+                    self.cursor.down(rows);
                     self.cursor.begin();
                 } else {
                     self.cursor.right(column_bound)
                 }
             }
             CursorMovement::Up => self.cursor.up(),
-            CursorMovement::Down => self.cursor.down(self.rows.len() as u16),
+            CursorMovement::Down => self.cursor.down(rows),
             CursorMovement::ScreenTop => {
                 for _ in 0..self.size.rows() {
                     self.cursor.up()
                 }
             }
             CursorMovement::ScreenBottom => {
-                let rows = self.rows.len() as u16;
                 for _ in 0..self.size.rows() {
                     self.cursor.down(rows)
                 }
