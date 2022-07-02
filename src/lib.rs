@@ -40,6 +40,7 @@ pub struct Editor {
     cursor: cursor::Position,
     rows: Vec<String>,
     row_offset: u16,
+    col_offset: u16,
 }
 
 impl Editor {
@@ -49,6 +50,7 @@ impl Editor {
             cursor: cursor::Position::default().with_bounds(cols, rows),
             rows: Default::default(),
             row_offset: 0,
+            col_offset: 0,
         }
     }
 
@@ -67,8 +69,16 @@ impl Editor {
             } else {
                 let len = self.rows[file_row as usize]
                     .len()
-                    .clamp(0, self.size.cols() as usize);
-                write!(writer, "{}", &self.rows[file_row as usize][..len])?;
+                    .saturating_sub(self.col_offset as usize)
+                    .min(self.size.cols() as usize);
+
+                if self.rows[file_row as usize].len() >= self.col_offset as usize {
+                    write!(
+                        writer,
+                        "{}",
+                        &self.rows[file_row as usize][(self.col_offset as usize)..self.col_offset as usize + len]
+                    )?;
+                }
             }
 
             queue!(writer, Clear(ClearType::UntilNewLine))?;
@@ -87,7 +97,7 @@ impl Editor {
         self.draw_rows(writer)?;
         queue!(
             writer,
-            MoveTo(self.cursor.x(), self.cursor.y() - self.row_offset),
+            MoveTo(self.cursor.x() - self.col_offset, self.cursor.y() - self.row_offset),
             Show
         )?;
 
@@ -103,6 +113,14 @@ impl Editor {
 
         if self.cursor.y() >= self.row_offset + self.size.rows() {
             self.row_offset = self.cursor.y() - self.size.rows() + 1;
+        }
+
+        if self.cursor.x() < self.col_offset {
+            self.col_offset = self.cursor.x();
+        }
+
+        if self.cursor.x() >= self.col_offset + self.size.cols() {
+            self.col_offset = self.cursor.x() - self.size.cols() + 1;
         }
     }
 

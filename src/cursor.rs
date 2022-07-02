@@ -54,7 +54,7 @@ impl Position {
     }
 
     pub fn right(&mut self) {
-        self.x = (self.x + 1).clamp(0, self.bounds.0);
+        self.x = self.x.saturating_add(1);
     }
 
     pub fn far_right(&mut self) {
