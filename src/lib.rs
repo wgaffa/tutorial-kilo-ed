@@ -137,8 +137,12 @@ impl Editor {
     }
 
     pub fn refresh<W: Write>(&mut self, writer: &mut W) -> crossterm::Result<()> {
-        self.render_cursor = self.rows[self.cursor.y() as usize]
-            .render_cursor(self.cursor, |x, y| BoundedCursor::new(x, y));
+        self.render_cursor = self
+            .rows
+            .get(self.cursor.y() as usize)
+            .map(|row| row.render_cursor(self.cursor, |x, y| BoundedCursor::new(x, y)))
+            .unwrap_or_else(|| BoundedCursor::new(0, self.cursor.y()));
+
         self.screen.scroll(&self.render_cursor);
         queue!(writer, MoveTo(0, 0), Hide)?;
 
