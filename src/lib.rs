@@ -12,7 +12,7 @@ use crossterm::{
     queue,
     terminal::{Clear, ClearType},
 };
-use cursor::CursorMovement;
+use cursor::{BoundedCursor, CursorMovement};
 
 pub mod cursor;
 pub mod macros;
@@ -47,18 +47,44 @@ impl Row {
 
     /// Updates the render buffer
     fn update(&mut self) {
-        self.render = self.buffer.chars().map(|x| match x {
-            '\t' => " ".repeat(TAB_STOP),
-            c => c.to_string(),
-        })
-        .collect()
+        self.render = self
+            .buffer
+            .chars()
+            .map(|x| match x {
+                '\t' => " ".repeat(TAB_STOP),
+                c => c.to_string(),
+            })
+            .collect()
+    }
+
+    fn render_cursor<T, U, F>(&self, cursor: T, f: F) -> U
+    where
+        T: Cursor,
+        U: Cursor,
+        F: FnOnce(u16, u16) -> U,
+    {
+        let render_x = self
+            .buffer
+            .chars()
+            .take(cursor.x() as usize)
+            .fold(0, |rx, ch| {
+                let new_x = match ch {
+                    '\t' => rx + (TAB_STOP - 1) - (rx % TAB_STOP),
+                    _ => rx,
+                };
+
+                new_x + 1
+            }) as u16;
+
+        f(render_x, cursor.y())
     }
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct Editor {
     screen: Screen,
-    cursor: cursor::BoundedCursor,
+    cursor: BoundedCursor,
+    render_cursor: BoundedCursor,
     rows: Vec<Row>,
 }
 
@@ -66,7 +92,8 @@ impl Editor {
     pub fn new(cols: u16, rows: u16) -> Self {
         Self {
             screen: Screen::new(cols, rows),
-            cursor: cursor::BoundedCursor::default(),
+            cursor: BoundedCursor::default(),
+            render_cursor: BoundedCursor::default(),
             rows: Default::default(),
         }
     }
@@ -110,14 +137,16 @@ impl Editor {
     }
 
     pub fn refresh<W: Write>(&mut self, writer: &mut W) -> crossterm::Result<()> {
-        self.screen.scroll(&self.cursor);
+        self.render_cursor = self.rows[self.cursor.y() as usize]
+            .render_cursor(self.cursor, |x, y| BoundedCursor::new(x, y));
+        self.screen.scroll(&self.render_cursor);
         queue!(writer, MoveTo(0, 0), Hide)?;
 
         self.draw_rows(writer)?;
         queue!(
             writer,
             MoveTo(
-                self.cursor.x() - self.screen.col_offset(),
+                self.render_cursor.x() - self.screen.col_offset(),
                 self.cursor.y() - self.screen.row_offset()
             ),
             Show
