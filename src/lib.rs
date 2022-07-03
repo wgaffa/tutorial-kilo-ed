@@ -18,8 +18,10 @@ pub mod cursor;
 pub mod macros;
 pub mod screen;
 
-use screen::Screen;
 use cursor::Cursor;
+use screen::Screen;
+
+const TAB_STOP: usize = 8;
 
 /// The position on screen or buffer. The tuple index represents the horizontal value
 /// x or column while the vertical is y or rows for example.
@@ -27,10 +29,37 @@ use cursor::Cursor;
 pub struct Position(u16, u16);
 
 #[derive(Debug, Clone, Default)]
+struct Row {
+    buffer: String,
+    render: String,
+}
+
+impl Row {
+    fn new<T: Into<String>>(buffer: T) -> Self {
+        let mut row = Self {
+            buffer: buffer.into(),
+            render: String::new(),
+        };
+
+        row.update();
+        row
+    }
+
+    /// Updates the render buffer
+    fn update(&mut self) {
+        self.render = self.buffer.chars().map(|x| match x {
+            '\t' => " ".repeat(TAB_STOP),
+            c => c.to_string(),
+        })
+        .collect()
+    }
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct Editor {
     screen: Screen,
     cursor: cursor::BoundedCursor,
-    rows: Vec<String>,
+    rows: Vec<Row>,
 }
 
 impl Editor {
@@ -56,16 +85,17 @@ impl Editor {
                 }
             } else {
                 let len = self.rows[file_row as usize]
+                    .render
                     .len()
                     .saturating_sub(self.screen.col_offset() as usize)
                     .min(self.screen.cols() as usize);
 
-                if self.rows[file_row as usize].len() >= self.screen.col_offset() as usize {
+                if self.rows[file_row as usize].render.len() >= self.screen.col_offset() as usize {
                     write!(
                         writer,
                         "{}",
-                        &self.rows[file_row as usize]
-                            [(self.screen.col_offset() as usize)..self.screen.col_offset() as usize + len]
+                        &self.rows[file_row as usize].render[(self.screen.col_offset() as usize)
+                            ..self.screen.col_offset() as usize + len]
                     )?;
                 }
             }
@@ -102,7 +132,7 @@ impl Editor {
         let column_bound = if self.cursor.y() >= self.rows.len() as u16 {
             0
         } else {
-            self.rows[self.cursor.y() as usize].len() as u16
+            self.rows[self.cursor.y() as usize].buffer.len() as u16
         };
 
         let rows = self.rows.len() as u16;
@@ -112,14 +142,14 @@ impl Editor {
                 if self.cursor.y() > 0 && self.cursor.x() == 0 {
                     self.cursor.up();
                     self.cursor
-                        .end(self.rows[self.cursor.y() as usize].len() as u16)
+                        .end(self.rows[self.cursor.y() as usize].buffer.len() as u16)
                 } else {
                     self.cursor.left()
                 }
             }
             CursorMovement::Right => {
                 if self.cursor.y() < rows
-                    && self.cursor.x() == self.rows[self.cursor.y() as usize].len() as u16
+                    && self.cursor.x() == self.rows[self.cursor.y() as usize].buffer.len() as u16
                 {
                     self.cursor.down(rows);
                     self.cursor.begin();
@@ -148,7 +178,7 @@ impl Editor {
             let c = self.cursor.x().min(
                 self.rows
                     .get(self.cursor.y() as usize)
-                    .map(|x| x.len() as u16)
+                    .map(|x| x.buffer.len() as u16)
                     .unwrap_or(0),
             );
 
@@ -187,7 +217,7 @@ impl Editor {
 
     pub fn open<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
         let content = fs::read_to_string(path)?;
-        self.rows = content.lines().map(String::from).collect();
+        self.rows = content.lines().map(Row::new).collect();
         Ok(())
     }
 
