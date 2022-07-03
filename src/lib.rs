@@ -139,19 +139,25 @@ impl Editor {
 
     pub fn draw_status_bar<W: Write>(&self, writer: &mut W) -> io::Result<()> {
         const NO_NAME: &str = "[No Name]";
-        let filename = self.filename.as_ref().map(|x| &x[..x.len().min(20)]).unwrap_or(NO_NAME);
+        let filename = self
+            .filename
+            .as_ref()
+            .map(|x| &x[..x.len().min(20)])
+            .unwrap_or(NO_NAME);
+
+        let left = format!("{} - {} lines", filename, self.rows.len());
+        let right = format!("{}/{}", self.cursor.y() + 1, self.rows.len());
+
+        let filler = (self.screen.cols() as usize).saturating_sub(right.len() + left.len());
         let modeline = format!(
-            "{} - {}",
-            filename,
-            self.rows.len()
+            "{left:<}{}{right:>}",
+            " ".repeat(filler)
         );
 
-        let fill_length = self.screen.cols() as usize - modeline.len();
         queue!(
             writer,
             SetAttribute(Attribute::Reverse),
             Print(modeline),
-            Print(" ".repeat(fill_length)),
             SetAttribute(Attribute::Reset),
         )?;
 
