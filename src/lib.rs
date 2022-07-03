@@ -10,6 +10,7 @@ use crossterm::{
     event,
     event::{Event, KeyCode, KeyEvent, KeyModifiers},
     queue,
+    style::{Attribute, Print, SetAttribute},
     terminal::{Clear, ClearType},
 };
 use cursor::{BoundedCursor, CursorMovement};
@@ -86,15 +87,17 @@ pub struct Editor {
     cursor: BoundedCursor,
     render_cursor: BoundedCursor,
     rows: Vec<Row>,
+    filename: Option<String>,
 }
 
 impl Editor {
     pub fn new(cols: u16, rows: u16) -> Self {
         Self {
-            screen: Screen::new(cols, rows),
+            screen: Screen::new(cols, rows - 1),
             cursor: BoundedCursor::default(),
             render_cursor: BoundedCursor::default(),
             rows: Default::default(),
+            filename: None,
         }
     }
 
@@ -128,10 +131,29 @@ impl Editor {
             }
 
             queue!(writer, Clear(ClearType::UntilNewLine))?;
-            if i < self.screen.rows() - 1 {
-                write!(writer, "\r\n")?;
-            }
+            write!(writer, "\r\n")?;
         }
+
+        Ok(())
+    }
+
+    pub fn draw_status_bar<W: Write>(&self, writer: &mut W) -> io::Result<()> {
+        const NO_NAME: &str = "[No Name]";
+        let filename = self.filename.as_ref().map(|x| &x[..x.len().min(20)]).unwrap_or(NO_NAME);
+        let modeline = format!(
+            "{} - {}",
+            filename,
+            self.rows.len()
+        );
+
+        let fill_length = self.screen.cols() as usize - modeline.len();
+        queue!(
+            writer,
+            SetAttribute(Attribute::Reverse),
+            Print(modeline),
+            Print(" ".repeat(fill_length)),
+            SetAttribute(Attribute::Reset),
+        )?;
 
         Ok(())
     }
@@ -147,6 +169,7 @@ impl Editor {
         queue!(writer, MoveTo(0, 0), Hide)?;
 
         self.draw_rows(writer)?;
+        self.draw_status_bar(writer)?;
         queue!(
             writer,
             MoveTo(
@@ -208,8 +231,10 @@ impl Editor {
                     self.cursor.down(rows)
                 }
             }
-            CursorMovement::ScreenEnd => if let Some(row) = self.rows.get(self.cursor.y() as usize) {
-                self.cursor.end(row.buffer.len() as u16)
+            CursorMovement::ScreenEnd => {
+                if let Some(row) = self.rows.get(self.cursor.y() as usize) {
+                    self.cursor.end(row.buffer.len() as u16)
+                }
             }
             CursorMovement::ScreenBegin => self.cursor.begin(),
         }
@@ -257,14 +282,15 @@ impl Editor {
     }
 
     pub fn open<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
-        let content = fs::read_to_string(path)?;
+        let content = fs::read_to_string(&path)?;
         self.rows = content.lines().map(Row::new).collect();
+        self.filename = Some(path.as_ref().to_string_lossy().into());
         Ok(())
     }
 
     fn map_key(key: KeyCode) -> Option<CursorMovement> {
         match key {
-            KeyCode::Left | KeyCode::Char('a')=> Some(CursorMovement::Left),
+            KeyCode::Left | KeyCode::Char('a') => Some(CursorMovement::Left),
             KeyCode::Right | KeyCode::Char('d') => Some(CursorMovement::Right),
             KeyCode::Up | KeyCode::Char('w') => Some(CursorMovement::Up),
             KeyCode::Down | KeyCode::Char('s') => Some(CursorMovement::Down),
