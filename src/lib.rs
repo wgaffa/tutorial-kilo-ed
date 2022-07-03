@@ -193,11 +193,17 @@ impl Editor {
             CursorMovement::Up => self.cursor.up(),
             CursorMovement::Down => self.cursor.down(rows),
             CursorMovement::ScreenTop => {
+                self.cursor.to(self.cursor.x(), self.screen.row_offset());
+
                 for _ in 0..self.screen.rows() {
                     self.cursor.up()
                 }
             }
             CursorMovement::ScreenBottom => {
+                let y =
+                    (self.rows.len() as u16).min(self.screen.row_offset() + self.screen.rows() - 1);
+                self.cursor.to(self.cursor.x(), y);
+
                 for _ in 0..self.screen.rows() {
                     self.cursor.down(rows)
                 }

@@ -53,9 +53,22 @@ impl BoundedCursor {
         self.position.0 = 0;
     }
 
+    pub fn bottom(&mut self, row_bound: u16) {
+        self.position.1 = row_bound;
+    }
+
+    pub fn top(&mut self, row_bound: u16) {
+        self.position.0 = row_bound;
+    }
+
     pub fn snap(&mut self, row_bound: u16, col_bound: u16) {
         self.position.0 = self.position.0.min(col_bound);
         self.position.1 = self.position.1.min(row_bound);
+    }
+
+    pub fn to(&mut self, x: u16, y: u16) {
+        self.position.0 = x;
+        self.position.1 = y;
     }
 }
 
