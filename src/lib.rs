@@ -99,7 +99,7 @@ impl Editor {
     }
 
     pub fn move_cursor(&mut self, key: CursorMovement) {
-        let column_bound = if self.cursor.y() >= self.screen.rows() {
+        let column_bound = if self.cursor.y() >= self.rows.len() as u16 {
             0
         } else {
             self.rows[self.cursor.y() as usize].len() as u16
