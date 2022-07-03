@@ -264,14 +264,10 @@ impl Editor {
 
     fn map_key(key: KeyCode) -> Option<CursorMovement> {
         match key {
-            KeyCode::Left => Some(CursorMovement::Left),
-            KeyCode::Right => Some(CursorMovement::Right),
-            KeyCode::Up => Some(CursorMovement::Up),
-            KeyCode::Down => Some(CursorMovement::Down),
-            KeyCode::Char('a') => Some(CursorMovement::Left),
-            KeyCode::Char('d') => Some(CursorMovement::Right),
-            KeyCode::Char('w') => Some(CursorMovement::Up),
-            KeyCode::Char('s') => Some(CursorMovement::Down),
+            KeyCode::Left | KeyCode::Char('a')=> Some(CursorMovement::Left),
+            KeyCode::Right | KeyCode::Char('d') => Some(CursorMovement::Right),
+            KeyCode::Up | KeyCode::Char('w') => Some(CursorMovement::Up),
+            KeyCode::Down | KeyCode::Char('s') => Some(CursorMovement::Down),
             KeyCode::PageUp => Some(CursorMovement::ScreenTop),
             KeyCode::PageDown => Some(CursorMovement::ScreenBottom),
             KeyCode::End => Some(CursorMovement::ScreenEnd),
