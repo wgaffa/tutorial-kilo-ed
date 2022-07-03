@@ -208,7 +208,9 @@ impl Editor {
                     self.cursor.down(rows)
                 }
             }
-            CursorMovement::ScreenEnd => self.cursor.end(self.screen.cols()),
+            CursorMovement::ScreenEnd => if let Some(row) = self.rows.get(self.cursor.y() as usize) {
+                self.cursor.end(row.buffer.len() as u16)
+            }
             CursorMovement::ScreenBegin => self.cursor.begin(),
         }
 
@@ -272,8 +274,8 @@ impl Editor {
             KeyCode::Char('s') => Some(CursorMovement::Down),
             KeyCode::PageUp => Some(CursorMovement::ScreenTop),
             KeyCode::PageDown => Some(CursorMovement::ScreenBottom),
-            KeyCode::End => Some(CursorMovement::ScreenBegin),
-            KeyCode::Home => Some(CursorMovement::ScreenEnd),
+            KeyCode::End => Some(CursorMovement::ScreenEnd),
+            KeyCode::Home => Some(CursorMovement::ScreenBegin),
             _ => None,
         }
     }
