@@ -55,7 +55,7 @@ fn cleanup() -> crossterm::Result<()> {
     let err1 = execute!(io::stdout(), LeaveAlternateScreen);
     let err2 = terminal::disable_raw_mode();
 
-    err1.or(err2)
+    err1.and(err2)
 }
 
 fn startup() -> crossterm::Result<()> {

@@ -3,6 +3,8 @@ use std::{
     fs,
     io::{self, Write},
     path::Path,
+    rc::Rc,
+    cell::RefCell,
 };
 
 use crossterm::{
@@ -13,17 +15,20 @@ use crossterm::{
     style::{Attribute, Print, SetAttribute},
     terminal::{Clear, ClearType},
 };
-use cursor::{BoundedCursor, CursorMovement};
+use cursor::*;
 
 pub mod cursor;
+pub mod error;
 pub mod macros;
 pub mod screen;
-pub mod error;
 
 use cursor::Cursor;
 use screen::Screen;
 
 const TAB_STOP: usize = 8;
+
+type RowBufferRef = Rc<RefCell<Vec<Row>>>;
+type ScreenRef = Rc<RefCell<Screen>>;
 
 /// The position on screen or buffer. The tuple index represents the horizontal value
 /// x or column while the vertical is y or rows for example.
@@ -59,12 +64,7 @@ impl Row {
             .collect()
     }
 
-    fn render_cursor<T, U, F>(&self, cursor: T, f: F) -> U
-    where
-        T: Cursor,
-        U: Cursor,
-        F: FnOnce(u16, u16) -> U,
-    {
+    fn render_cursor<T: Cursor>(&self, cursor: &T) -> (u16, u16) {
         let render_x = self
             .buffer
             .chars()
@@ -78,35 +78,40 @@ impl Row {
                 new_x + 1
             }) as u16;
 
-        f(render_x, cursor.y())
+        (render_x, cursor.y())
     }
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct Editor {
-    screen: Screen,
+    screen: ScreenRef,
     cursor: BoundedCursor,
     render_cursor: BoundedCursor,
-    rows: Vec<Row>,
+    rows: RowBufferRef,
     filename: Option<String>,
 }
 
 impl Editor {
     pub fn new(cols: u16, rows: u16) -> Self {
-        Self {
-            screen: Screen::new(cols, rows - 1),
+        let mut me = Self {
+            screen: Rc::new(RefCell::new(Screen::new(cols, rows - 1))),
             cursor: BoundedCursor::default(),
             render_cursor: BoundedCursor::default(),
             rows: Default::default(),
             filename: None,
-        }
+        };
+
+        me.cursor.set_screen(Rc::clone(&me.screen));
+
+        me
     }
 
     pub fn draw_rows<W: Write>(&self, writer: &mut W) -> io::Result<()> {
-        for i in 0..self.screen.rows() {
-            let file_row = i + self.screen.row_offset();
-            if file_row >= self.rows.len() as u16 {
-                if self.rows.is_empty() && i == (self.screen.rows() / 3) {
+        let screen = self.screen.borrow();
+        for i in 0..screen.rows() {
+            let file_row = i + screen.row_offset();
+            if file_row >= self.rows.borrow().len() as u16 {
+                if self.rows.borrow().is_empty() && i == (screen.rows() / 3) {
                     let message = self.message();
                     let padding = self.padding(message.len() as u16);
 
@@ -115,18 +120,18 @@ impl Editor {
                     write!(writer, "~")?;
                 }
             } else {
-                let len = self.rows[file_row as usize]
+                let len = self.rows.borrow()[file_row as usize]
                     .render
                     .len()
-                    .saturating_sub(self.screen.col_offset() as usize)
-                    .min(self.screen.cols() as usize);
+                    .saturating_sub(screen.col_offset() as usize)
+                    .min(screen.cols() as usize);
 
-                if self.rows[file_row as usize].render.len() >= self.screen.col_offset() as usize {
+                if self.rows.borrow()[file_row as usize].render.len() >= screen.col_offset() as usize {
                     write!(
                         writer,
                         "{}",
-                        &self.rows[file_row as usize].render[(self.screen.col_offset() as usize)
-                            ..self.screen.col_offset() as usize + len]
+                        &self.rows.borrow()[file_row as usize].render[(screen.col_offset() as usize)
+                            ..screen.col_offset() as usize + len]
                     )?;
                 }
             }
@@ -146,11 +151,11 @@ impl Editor {
             .map(|x| &x[..x.len().min(20)])
             .unwrap_or(NO_NAME);
 
-        let rows = self.rows.len();
+        let rows = self.rows.borrow().len();
         let left = format!("{} - {} lines", filename, rows);
         let right = format!("{}/{}", self.cursor.y() + 1, rows);
 
-        let fill_length = (self.screen.cols() as usize).saturating_sub(right.len() + left.len());
+        let fill_length = (self.screen.borrow().cols() as usize).saturating_sub(right.len() + left.len());
         const SPACES: &str = "                                                                                                                                ";
         let modeline = if fill_length < SPACES.len() {
             format!("{left:<}{}{right:>}", &SPACES[..fill_length])
@@ -169,13 +174,15 @@ impl Editor {
     }
 
     pub fn refresh<W: Write>(&mut self, writer: &mut W) -> crossterm::Result<()> {
-        self.render_cursor = self
-            .rows
-            .get(self.cursor.y() as usize)
-            .map(|row| row.render_cursor(self.cursor, |x, y| BoundedCursor::new(x, y)))
-            .unwrap_or_else(|| BoundedCursor::new(0, self.cursor.y()));
+        // Update the render cursor to match cursor position
+        let render = self.rows
+                .borrow()
+                .get(self.cursor.y() as usize)
+                .map(|row| row.render_cursor(&self.cursor))
+                .unwrap_or_else(|| (0, self.cursor.y()));
+        *self.render_cursor.position_mut() = Position(render.0, render.1);
 
-        self.screen.scroll(&self.render_cursor);
+        self.screen.borrow_mut().scroll(&self.render_cursor);
         queue!(writer, MoveTo(0, 0), Hide)?;
 
         self.draw_rows(writer)?;
@@ -183,8 +190,8 @@ impl Editor {
         queue!(
             writer,
             MoveTo(
-                self.render_cursor.x() - self.screen.col_offset(),
-                self.cursor.y() - self.screen.row_offset()
+                self.render_cursor.x() - self.screen.borrow().col_offset(),
+                self.cursor.y() - self.screen.borrow().row_offset()
             ),
             Show
         )?;
@@ -194,97 +201,44 @@ impl Editor {
         Ok(())
     }
 
-    pub fn move_cursor(&mut self, key: CursorMovement) {
-        let column_bound = if self.cursor.y() >= self.rows.len() as u16 {
-            0
-        } else {
-            self.rows[self.cursor.y() as usize].buffer.len() as u16
-        };
-
-        let rows = self.rows.len() as u16;
-
-        match key {
-            CursorMovement::Left => {
-                if self.cursor.y() > 0 && self.cursor.x() == 0 {
-                    self.cursor.up();
-                    self.cursor
-                        .end(self.rows[self.cursor.y() as usize].buffer.len() as u16)
-                } else {
-                    self.cursor.left()
-                }
-            }
-            CursorMovement::Right => {
-                if self.cursor.y() < rows
-                    && self.cursor.x() == self.rows[self.cursor.y() as usize].buffer.len() as u16
-                {
-                    self.cursor.down(rows);
-                    self.cursor.begin();
-                } else {
-                    self.cursor.right(column_bound)
-                }
-            }
-            CursorMovement::Up => self.cursor.up(),
-            CursorMovement::Down => self.cursor.down(rows),
-            CursorMovement::ScreenTop => {
-                self.cursor.to(self.cursor.x(), self.screen.row_offset());
-
-                for _ in 0..self.screen.rows() {
-                    self.cursor.up()
-                }
-            }
-            CursorMovement::ScreenBottom => {
-                let y =
-                    (self.rows.len() as u16).min(self.screen.row_offset() + self.screen.rows() - 1);
-                self.cursor.to(self.cursor.x(), y);
-
-                for _ in 0..self.screen.rows() {
-                    self.cursor.down(rows)
-                }
-            }
-            CursorMovement::ScreenEnd => {
-                if let Some(row) = self.rows.get(self.cursor.y() as usize) {
-                    self.cursor.end(row.buffer.len() as u16)
-                }
-            }
-            CursorMovement::ScreenBegin => self.cursor.begin(),
-        }
-
-        let (row_bound, col_bound) = {
-            let r = self.cursor.y();
-            let c = self.cursor.x().min(
-                self.rows
-                    .get(self.cursor.y() as usize)
-                    .map(|x| x.buffer.len() as u16)
-                    .unwrap_or(0),
-            );
-
-            (r, c)
-        };
-
-        self.cursor.snap(row_bound, col_bound);
-    }
-
     pub fn process_key(&mut self) -> bool {
         match event::read() {
             Ok(match_key!(KeyCode::Char('q'), KeyModifiers::CONTROL)) => return false,
-            Ok(key!(ch)) if matches!(ch, 'a' | 'w' | 'd' | 's') => self.move_cursor(
-                Self::map_key(KeyCode::Char(ch)).expect("Could not handle incorrect keycode"),
-            ),
             Ok(Event::Key(KeyEvent { code, .. }))
-                if matches!(
-                    code,
-                    KeyCode::Left
-                        | KeyCode::Right
-                        | KeyCode::Up
-                        | KeyCode::Down
-                        | KeyCode::PageDown
-                        | KeyCode::PageUp
-                        | KeyCode::Home
-                        | KeyCode::End
-                ) =>
+                if matches!(code, KeyCode::Left | KeyCode::Char('a')) =>
             {
-                self.move_cursor(Self::map_key(code).expect("Could not handle incorrect keycode"));
+                self.cursor.left()
             }
+            Ok(Event::Key(KeyEvent { code, .. }))
+                if matches!(code, KeyCode::Right | KeyCode::Char('d')) =>
+            {
+                self.cursor.right()
+            }
+            Ok(Event::Key(KeyEvent { code, .. }))
+                if matches!(code, KeyCode::Up | KeyCode::Char('w')) =>
+            {
+                self.cursor.up()
+            }
+            Ok(Event::Key(KeyEvent { code, .. }))
+                if matches!(code, KeyCode::Down | KeyCode::Char('s')) =>
+            {
+                self.cursor.down()
+            }
+            Ok(Event::Key(KeyEvent {
+                code: KeyCode::PageUp,
+                ..
+            })) => self.cursor.top(),
+            Ok(Event::Key(KeyEvent {
+                code: KeyCode::PageDown,
+                ..
+            })) => self.cursor.bottom(),
+            Ok(Event::Key(KeyEvent {
+                code: KeyCode::Home,
+                ..
+            })) => self.cursor.begin(),
+            Ok(Event::Key(KeyEvent {
+                code: KeyCode::End, ..
+            })) => self.cursor.end(),
             _ => {}
         }
 
@@ -293,39 +247,26 @@ impl Editor {
 
     pub fn open<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
         let content = fs::read_to_string(&path)?;
-        self.rows = content.lines().map(Row::new).collect();
+        self.rows = Rc::new(RefCell::new(content.lines().map(Row::new).collect()));
         self.filename = Some(path.as_ref().to_string_lossy().into());
+        self.cursor.set_buffer(Rc::clone(&self.rows));
         Ok(())
     }
 
     pub fn from_str(&mut self, contents: &str) {
-        self.rows = contents.lines().map(Row::new).collect();
-    }
-
-    fn map_key(key: KeyCode) -> Option<CursorMovement> {
-        match key {
-            KeyCode::Left | KeyCode::Char('a') => Some(CursorMovement::Left),
-            KeyCode::Right | KeyCode::Char('d') => Some(CursorMovement::Right),
-            KeyCode::Up | KeyCode::Char('w') => Some(CursorMovement::Up),
-            KeyCode::Down | KeyCode::Char('s') => Some(CursorMovement::Down),
-            KeyCode::PageUp => Some(CursorMovement::ScreenTop),
-            KeyCode::PageDown => Some(CursorMovement::ScreenBottom),
-            KeyCode::End => Some(CursorMovement::ScreenEnd),
-            KeyCode::Home => Some(CursorMovement::ScreenBegin),
-            _ => None,
-        }
+        self.rows = Rc::new(RefCell::new(contents.lines().map(Row::new).collect()));
     }
 
     fn padding(&self, message_len: u16) -> Padding {
-        let pad_size = (self.screen.cols() - message_len) / 2;
+        let pad_size = (self.screen.borrow().cols() - message_len) / 2;
         Padding::new('~', pad_size as usize)
     }
 
     fn message(&self) -> &str {
         let message = concat!("Kilo editor -- version ", version!());
 
-        if message.len() > self.screen.cols() as usize {
-            &message[..self.screen.cols() as usize]
+        if message.len() > self.screen.borrow().cols() as usize {
+            &message[..self.screen.borrow().cols() as usize]
         } else {
             message
         }
