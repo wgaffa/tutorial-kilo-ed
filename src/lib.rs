@@ -145,24 +145,20 @@ impl Editor {
             .map(|x| &x[..x.len().min(20)])
             .unwrap_or(NO_NAME);
 
-        let left = format!("{} - {} lines", filename, self.rows.len());
-        let right = format!("{}/{}", self.cursor.y() + 1, self.rows.len());
+        let rows = self.rows.len();
+        let left = format!("{} - {} lines", filename, rows);
+        let right = format!("{}/{}", self.cursor.y() + 1, rows);
 
         let filler = (self.screen.cols() as usize).saturating_sub(right.len() + left.len());
+        let modeline = format!(
+            "{left:<}{}{right:>}",
+            " ".repeat(filler)
+        );
 
         queue!(
             writer,
             SetAttribute(Attribute::Reverse),
-            Print(left),
-        )?;
-
-        for _ in 0..filler {
-            write!(writer, " ")?;
-        }
-
-        queue!(
-            writer,
-            Print(right),
+            Print(modeline),
             SetAttribute(Attribute::Reset),
         )?;
 

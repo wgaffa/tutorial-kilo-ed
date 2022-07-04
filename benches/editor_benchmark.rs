@@ -18,7 +18,7 @@ pub fn status_bar_benchmark(c: &mut Criterion) {
     let contents = include_str!("lorem.txt");
 
     let mut group = c.benchmark_group("Editor::draw_status_bar");
-    for size in [2, 32, 64, 128, 254].iter() {
+    for size in [2, 32, 64, 128, 254, 1024].iter() {
         let mut writer = NullWriter;
 
         let mut editor = Editor::new(*size, *size);
