@@ -1,44 +1,41 @@
-use std::{fmt::Display, env, io};
+use std::{env, io};
 
 use crossterm::{
-    cursor::MoveTo,
     execute,
-    queue,
-    terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{self, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use error_stack::{IntoReport, ResultExt};
 
-use kilo_edit::Editor;
+use kilo_edit::{error::ApplicationError, Editor};
 
-fn die<T: Display, U: Display>(message: T, err: U) -> ! {
-    let mut stdout = io::stdout();
-    let _ = clear_screen(&mut stdout);
+fn main() -> error_stack::Result<(), ApplicationError> {
+    startup()
+        .report()
+        .change_context(ApplicationError)
+        .attach_printable("Failed to initialize screen")?;
 
-    let _ = terminal::disable_raw_mode();
+    let mut editor = setup_editor()
+        .report()
+        .change_context(ApplicationError)
+        .attach_printable("Failed to initialize editor")?;
 
-    eprintln!("{message}: {err}");
-
-    std::process::exit(1);
-}
-
-fn clear_screen<W: io::Write>(writer: &mut W) -> crossterm::Result<()> {
-    queue!(writer, Clear(ClearType::All), MoveTo(0, 0))?;
-
-    writer.flush()
-}
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    terminal::enable_raw_mode()?;
-    execute!(io::stdout(), EnterAlternateScreen)?;
-
-    let mut editor = setup_editor()?;
     let args = env::args().collect::<Vec<_>>();
     if args.len() >= 2 {
-        editor.open(&args[1])?;
+        editor
+            .open(&args[1])
+            .report()
+            .change_context(ApplicationError)
+            .attach_printable_lazy(|| format!("Unable to open the file: {}", args[1]))?;
     }
 
     loop {
         if let Err(e) = editor.refresh(&mut io::stdout()) {
-            die("unable to refresh screen", e);
+            cleanup()
+                .report()
+                .change_context(ApplicationError)
+                .attach_printable("Failed to do terminal cleanup")?;
+            return Err(error_stack::report!(ApplicationError)
+                .attach_printable(format!("Unable to refresh screen: {}", e)));
         }
 
         if !editor.process_key() {
@@ -46,10 +43,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    execute!(io::stdout(), LeaveAlternateScreen)?;
-    terminal::disable_raw_mode()?;
+    cleanup()
+        .report()
+        .change_context(ApplicationError)
+        .attach_printable("Failed to do terminal cleanup")?;
 
     Ok(())
+}
+
+fn cleanup() -> crossterm::Result<()> {
+    let err1 = execute!(io::stdout(), LeaveAlternateScreen);
+    let err2 = terminal::disable_raw_mode();
+
+    err1.or(err2)
+}
+
+fn startup() -> crossterm::Result<()> {
+    terminal::enable_raw_mode()?;
+    execute!(io::stdout(), EnterAlternateScreen)
 }
 
 fn setup_editor() -> crossterm::Result<Editor> {

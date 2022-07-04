@@ -18,6 +18,7 @@ use cursor::{BoundedCursor, CursorMovement};
 pub mod cursor;
 pub mod macros;
 pub mod screen;
+pub mod error;
 
 use cursor::Cursor;
 use screen::Screen;
