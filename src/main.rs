@@ -1,4 +1,4 @@
-use std::{env, io};
+use std::{fmt::Display, env, io};
 
 use crossterm::{
     cursor::MoveTo,
@@ -6,18 +6,16 @@ use crossterm::{
     queue,
     terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use errno::errno;
 
 use kilo_edit::Editor;
 
-fn die(message: &str) -> ! {
+fn die<T: Display, U: Display>(message: T, err: U) -> ! {
     let mut stdout = io::stdout();
     let _ = clear_screen(&mut stdout);
 
     let _ = terminal::disable_raw_mode();
 
-    let errno = errno();
-    eprintln!("{message}: {errno}");
+    eprintln!("{message}: {err}");
 
     std::process::exit(1);
 }
@@ -39,8 +37,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     loop {
-        if editor.refresh(&mut io::stdout()).is_err() {
-            die("unable to refresh screen");
+        if let Err(e) = editor.refresh(&mut io::stdout()) {
+            die("unable to refresh screen", e);
         }
 
         if !editor.process_key() {
