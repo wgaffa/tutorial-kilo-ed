@@ -149,11 +149,13 @@ impl Editor {
         let left = format!("{} - {} lines", filename, rows);
         let right = format!("{}/{}", self.cursor.y() + 1, rows);
 
-        let filler = (self.screen.cols() as usize).saturating_sub(right.len() + left.len());
-        let modeline = format!(
-            "{left:<}{}{right:>}",
-            " ".repeat(filler)
-        );
+        let fill_length = (self.screen.cols() as usize).saturating_sub(right.len() + left.len());
+        const SPACES: &str = "                                                                                                                                ";
+        let modeline = if fill_length < SPACES.len() {
+            format!("{left:<}{}{right:>}", &SPACES[..fill_length])
+        } else {
+            format!("{left:<}{}{right:>}", " ".repeat(fill_length))
+        };
 
         queue!(
             writer,
