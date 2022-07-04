@@ -149,15 +149,20 @@ impl Editor {
         let right = format!("{}/{}", self.cursor.y() + 1, self.rows.len());
 
         let filler = (self.screen.cols() as usize).saturating_sub(right.len() + left.len());
-        let modeline = format!(
-            "{left:<}{}{right:>}",
-            " ".repeat(filler)
-        );
 
         queue!(
             writer,
             SetAttribute(Attribute::Reverse),
-            Print(modeline),
+            Print(left),
+        )?;
+
+        for _ in 0..filler {
+            write!(writer, " ")?;
+        }
+
+        queue!(
+            writer,
+            Print(right),
             SetAttribute(Attribute::Reset),
         )?;
 
@@ -292,6 +297,10 @@ impl Editor {
         self.rows = content.lines().map(Row::new).collect();
         self.filename = Some(path.as_ref().to_string_lossy().into());
         Ok(())
+    }
+
+    pub fn from_str(&mut self, contents: &str) {
+        self.rows = contents.lines().map(Row::new).collect();
     }
 
     fn map_key(key: KeyCode) -> Option<CursorMovement> {
