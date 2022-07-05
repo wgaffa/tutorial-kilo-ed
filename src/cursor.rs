@@ -200,7 +200,7 @@ impl LineMovement for BoundedCursor {
             .buffer
             .borrow()
             .get(self.position.1 as usize)
-            .map(|row| row.buffer.len() as u16)
+            .map(|row| column_width(&row.buffer))
             .unwrap_or(0);
         self.position.0 = last_column;
     }
