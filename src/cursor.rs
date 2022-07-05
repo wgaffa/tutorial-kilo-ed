@@ -31,6 +31,19 @@ pub trait PageMovement {
 }
 
 #[derive(Debug, Clone, Default)]
+pub struct StaticCursor(u16, u16);
+
+impl Cursor for StaticCursor {
+    fn x(&self) -> u16 {
+        self.0
+    }
+
+    fn y(&self) -> u16 {
+        self.1
+    }
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct BoundedCursor {
     position: Position,
     buffer: crate::RowBufferRef,
@@ -44,6 +57,16 @@ impl BoundedCursor {
 
     pub(crate) fn set_screen(&mut self, screen: crate::ScreenRef) {
         self.screen = screen;
+    }
+
+    pub(crate) fn render(&self) -> impl Cursor {
+        let render = self.buffer
+                .borrow()
+                .get(self.position.1 as usize)
+                .map(|row| row.render_cursor(self))
+                .unwrap_or_else(|| (0, self.position.1));
+
+        StaticCursor(render.0, render.1)
     }
 
     pub fn position_mut(&mut self) -> &mut Position {

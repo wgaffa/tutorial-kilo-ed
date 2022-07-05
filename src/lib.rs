@@ -86,7 +86,6 @@ impl Row {
 pub struct Editor {
     screen: ScreenRef,
     cursor: BoundedCursor,
-    render_cursor: BoundedCursor,
     rows: RowBufferRef,
     filename: Option<String>,
 }
@@ -96,7 +95,6 @@ impl Editor {
         let mut me = Self {
             screen: Rc::new(RefCell::new(Screen::new(cols, rows - 1))),
             cursor: BoundedCursor::default(),
-            render_cursor: BoundedCursor::default(),
             rows: Default::default(),
             filename: None,
         };
@@ -175,14 +173,9 @@ impl Editor {
 
     pub fn refresh<W: Write>(&mut self, writer: &mut W) -> crossterm::Result<()> {
         // Update the render cursor to match cursor position
-        let render = self.rows
-                .borrow()
-                .get(self.cursor.y() as usize)
-                .map(|row| row.render_cursor(&self.cursor))
-                .unwrap_or_else(|| (0, self.cursor.y()));
-        *self.render_cursor.position_mut() = Position(render.0, render.1);
+        let render = self.cursor.render();
 
-        self.screen.borrow_mut().scroll(&self.render_cursor);
+        self.screen.borrow_mut().scroll(&render);
         queue!(writer, MoveTo(0, 0), Hide)?;
 
         self.draw_rows(writer)?;
@@ -190,7 +183,7 @@ impl Editor {
         queue!(
             writer,
             MoveTo(
-                self.render_cursor.x() - self.screen.borrow().col_offset(),
+                render.x() - self.screen.borrow().col_offset(),
                 self.cursor.y() - self.screen.borrow().row_offset()
             ),
             Show
