@@ -585,6 +585,7 @@ dependencies = [
  "plotters",
  "quickcheck",
  "quickcheck_macros",
+ "unicode-width",
 ]
 
 [[package]]

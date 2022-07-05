@@ -1,10 +1,10 @@
 use std::{
+    cell::RefCell,
     fmt,
     fs,
     io::{self, Write},
     path::Path,
     rc::Rc,
-    cell::RefCell,
 };
 
 use crossterm::{
@@ -15,6 +15,8 @@ use crossterm::{
     style::{Attribute, Print, SetAttribute},
     terminal::{Clear, ClearType},
 };
+use unicode_width::UnicodeWidthChar;
+
 use cursor::*;
 
 pub mod cursor;
@@ -68,15 +70,24 @@ impl Row {
         let render_x = self
             .buffer
             .chars()
-            .take(cursor.x() as usize)
-            .fold(0, |rx, ch| {
-                let new_x = match ch {
-                    '\t' => rx + (TAB_STOP - 1) - (rx % TAB_STOP),
-                    _ => rx,
-                };
+            .scan(0, |st, ch| {
+                if cursor.x() > *st {
+                    let (width, render_width) = if ch == '\t' {
+                        let tabstop = (TAB_STOP as u16 - 1) - (*st % TAB_STOP as u16) + 1;
+                        (1, tabstop)
+                    } else {
+                        let width = ch.width().unwrap_or(1) as u16;
+                        (width, width)
+                    };
 
-                new_x + 1
-            }) as u16;
+                    *st += width;
+
+                    Some(render_width)
+                } else {
+                    None
+                }
+            })
+            .sum::<u16>();
 
         (render_x, cursor.y())
     }
@@ -124,12 +135,14 @@ impl Editor {
                     .saturating_sub(screen.col_offset() as usize)
                     .min(screen.cols() as usize);
 
-                if self.rows.borrow()[file_row as usize].render.len() >= screen.col_offset() as usize {
+                if self.rows.borrow()[file_row as usize].render.len()
+                    >= screen.col_offset() as usize
+                {
                     write!(
                         writer,
                         "{}",
-                        &self.rows.borrow()[file_row as usize].render[(screen.col_offset() as usize)
-                            ..screen.col_offset() as usize + len]
+                        &self.rows.borrow()[file_row as usize].render
+                            [(screen.col_offset() as usize)..screen.col_offset() as usize + len]
                     )?;
                 }
             }
@@ -153,8 +166,10 @@ impl Editor {
         let left = format!("{} - {} lines", filename, rows);
         let right = format!("{}/{}", self.cursor.y() + 1, rows);
 
-        let fill_length = (self.screen.borrow().cols() as usize).saturating_sub(right.len() + left.len());
-        const SPACES: &str = "                                                                                                                                ";
+        let fill_length =
+            (self.screen.borrow().cols() as usize).saturating_sub(right.len() + left.len());
+        const SPACES: &str = "                                                                    \
+                                                                                          ";
         let modeline = if fill_length < SPACES.len() {
             format!("{left:<}{}{right:>}", &SPACES[..fill_length])
         } else {
