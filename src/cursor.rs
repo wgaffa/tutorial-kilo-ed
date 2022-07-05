@@ -30,7 +30,7 @@ pub trait PageMovement {
     fn bottom(&mut self);
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct StaticCursor(u16, u16);
 
 impl Cursor for StaticCursor {
