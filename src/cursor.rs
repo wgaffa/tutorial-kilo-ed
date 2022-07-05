@@ -124,7 +124,8 @@ impl HorizontalMovement for BoundedCursor {
 
                 // We can't use the old line variable here as we are switching lines
                 // and need to get the new line from the buffer
-                let column_width = buf.get(self.position.1 as usize)
+                let column_width = buf
+                    .get(self.position.1 as usize)
                     .map(|row| column_width(&row.buffer))
                     .unwrap_or(0);
 
