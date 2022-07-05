@@ -104,7 +104,7 @@ pub struct Editor {
 impl Editor {
     pub fn new(cols: u16, rows: u16) -> Self {
         let mut me = Self {
-            screen: Rc::new(RefCell::new(Screen::new(cols, rows - 1))),
+            screen: Rc::new(RefCell::new(Screen::new(cols, rows.saturating_sub(1)))),
             cursor: BoundedCursor::default(),
             rows: Default::default(),
             filename: None,
