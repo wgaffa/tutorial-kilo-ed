@@ -220,7 +220,7 @@ impl PageMovement for BoundedCursor {
 
         self.position.1 = y;
 
-        self.position.1 = self.position.1.saturating_add(screen.rows());
+        self.position.1 = self.position.1.saturating_add(screen.rows()).min(lines);
     }
 }
 
