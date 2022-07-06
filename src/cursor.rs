@@ -287,12 +287,13 @@ pub fn char_index(cursor: usize, buffer: &str) -> usize {
 mod tests {
     use super::*;
 
-    #[test]
-    fn char_index_should_return_byte_index_given_unicode_char() {
-        let input = "⛄";
+    use test_case::test_case;
 
-        let actual = char_index(1, input);
-
-        assert_eq!(3, actual);
+    #[test_case("⛄⛄", 4 => 6; "Two two-width, three byte")]
+    #[test_case("⛄", 2 => 3; "Single two-width, three byte")]
+    #[test_case("❄❄", 2 => 6; "Two one-width, three byte")]
+    #[test_case("❄", 1 => 3; "Single one-width, three byte")]
+    fn char_index_should_return_byte_index_given_unicode_char(input: &str, cursor: usize) -> usize {
+        char_index(cursor, input)
     }
 }
