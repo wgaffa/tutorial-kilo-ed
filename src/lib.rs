@@ -65,6 +65,11 @@ impl Row {
             })
             .collect()
     }
+
+    fn insert(&mut self, index: usize, ch: char) {
+        self.buffer.insert(index, ch);
+        self.update();
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -166,7 +171,10 @@ impl Editor {
 
     fn draw_message_bar<W: Write>(&self, writer: &mut W) -> io::Result<()> {
         queue!(writer, Clear(ClearType::UntilNewLine))?;
-        let message_len = self.status_message.len().min(self.screen.borrow().cols() as usize);
+        let message_len = self
+            .status_message
+            .len()
+            .min(self.screen.borrow().cols() as usize);
         if let Ok(duration) = self.status_time.elapsed() {
             if duration.as_secs() < 5 {
                 queue!(writer, Print(&self.status_message[..message_len]))?;
@@ -211,22 +219,22 @@ impl Editor {
         match event::read() {
             Ok(match_key!(KeyCode::Char('q'), KeyModifiers::CONTROL)) => return false,
             Ok(Event::Key(KeyEvent { code, .. }))
-                if matches!(code, KeyCode::Left | KeyCode::Char('a')) =>
+                if matches!(code, KeyCode::Left) =>
             {
                 self.cursor.left()
             }
             Ok(Event::Key(KeyEvent { code, .. }))
-                if matches!(code, KeyCode::Right | KeyCode::Char('d')) =>
+                if matches!(code, KeyCode::Right) =>
             {
                 self.cursor.right()
             }
             Ok(Event::Key(KeyEvent { code, .. }))
-                if matches!(code, KeyCode::Up | KeyCode::Char('w')) =>
+                if matches!(code, KeyCode::Up) =>
             {
                 self.cursor.up()
             }
             Ok(Event::Key(KeyEvent { code, .. }))
-                if matches!(code, KeyCode::Down | KeyCode::Char('s')) =>
+                if matches!(code, KeyCode::Down) =>
             {
                 self.cursor.down()
             }
@@ -245,6 +253,10 @@ impl Editor {
             Ok(Event::Key(KeyEvent {
                 code: KeyCode::End, ..
             })) => self.cursor.end(),
+            Ok(Event::Key(KeyEvent {
+                code: KeyCode::Char(ch),
+                ..
+            })) => self.insert_char(ch),
             _ => {}
         }
 
@@ -276,6 +288,18 @@ impl Editor {
         } else {
             message
         }
+    }
+
+    fn insert_char(&mut self, ch: char) {
+        {
+            let mut buffer = self.rows.borrow_mut();
+            if self.cursor.y() as usize == buffer.len() {
+                buffer.push(Row::new(""));
+            }
+
+            buffer[self.cursor.y() as usize].insert(self.cursor.x() as usize, ch);
+        }
+        self.cursor.right();
     }
 }
 
