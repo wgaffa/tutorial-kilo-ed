@@ -23,6 +23,7 @@ pub mod cursor;
 pub mod error;
 pub mod macros;
 pub mod screen;
+pub mod input;
 
 use cursor::Cursor;
 use screen::Screen;

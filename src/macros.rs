@@ -13,6 +13,12 @@ macro_rules! match_key {
             modifiers: $modifier,
         })
     };
+    ( $code:pat ) => {
+        Event::Key(KeyEvent {
+            code: $code,
+            ..
+        })
+    }
 }
 
 #[macro_export]
