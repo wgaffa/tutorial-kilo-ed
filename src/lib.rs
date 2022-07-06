@@ -5,6 +5,7 @@ use std::{
     io::{self, Write},
     path::Path,
     rc::Rc,
+    time::SystemTime,
 };
 
 use crossterm::{
@@ -66,21 +67,25 @@ impl Row {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Editor {
     screen: ScreenRef,
     cursor: BoundedCursor,
     rows: RowBufferRef,
     filename: Option<String>,
+    status_message: String,
+    status_time: SystemTime,
 }
 
 impl Editor {
     pub fn new(cols: u16, rows: u16) -> Self {
         let mut me = Self {
-            screen: Rc::new(RefCell::new(Screen::new(cols, rows.saturating_sub(1)))),
+            screen: Rc::new(RefCell::new(Screen::new(cols, rows))),
             cursor: BoundedCursor::default(),
             rows: Default::default(),
             filename: None,
+            status_message: String::new(),
+            status_time: SystemTime::now(),
         };
 
         me.cursor.set_screen(Rc::clone(&me.screen));
@@ -127,7 +132,7 @@ impl Editor {
         Ok(())
     }
 
-    pub fn draw_status_bar<W: Write>(&self, writer: &mut W) -> io::Result<()> {
+    fn draw_status_bar<W: Write>(&self, writer: &mut W) -> io::Result<()> {
         const NO_NAME: &str = "[No Name]";
         let filename = self
             .filename
@@ -153,7 +158,22 @@ impl Editor {
             SetAttribute(Attribute::Reverse),
             Print(modeline),
             SetAttribute(Attribute::Reset),
+            Print("\r\n"),
         )?;
+
+        Ok(())
+    }
+
+    fn draw_message_bar<W: Write>(&self, writer: &mut W) -> io::Result<()> {
+        queue!(writer, Clear(ClearType::UntilNewLine))?;
+        let message_len = self.status_message.len().min(self.screen.borrow().cols() as usize);
+        if let Ok(duration) = self.status_time.elapsed() {
+            if duration.as_secs() < 5 {
+                queue!(writer, Print(&self.status_message[..message_len]))?;
+            } else {
+                queue!(writer, Print(""))?;
+            }
+        }
 
         Ok(())
     }
@@ -167,6 +187,7 @@ impl Editor {
 
         self.draw_rows(writer)?;
         self.draw_status_bar(writer)?;
+        self.draw_message_bar(writer)?;
         queue!(
             writer,
             MoveTo(
@@ -179,6 +200,11 @@ impl Editor {
         writer.flush()?;
 
         Ok(())
+    }
+
+    pub fn set_status_message<T: Into<String>>(&mut self, message: T) {
+        self.status_message = message.into();
+        self.status_time = SystemTime::now();
     }
 
     pub fn process_key(&mut self) -> bool {
