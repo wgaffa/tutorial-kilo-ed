@@ -276,7 +276,7 @@ impl Editor {
             }
 
             let row = &mut buffer[self.cursor.y() as usize];
-            let index = cursor_to_char_index(&self.cursor, &row.buffer);
+            let index = char_index(self.cursor.x() as usize, &row.buffer);
             row.insert(index, ch);
         }
 

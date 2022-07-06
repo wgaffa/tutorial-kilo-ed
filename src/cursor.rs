@@ -5,15 +5,15 @@ use crate::Position;
 /// This trait is to determine the width of a character so that we can move the cursor
 /// properly. Some Unicode characters are more than one cursor wide.
 pub trait ConsoleWidth {
-    fn width(&self) -> u16;
+    fn render_width(&self) -> usize;
 }
 
 impl ConsoleWidth for char {
-    fn width(&self) -> u16 {
+    fn render_width(&self) -> usize {
         if *self == '\t' {
             1
         } else {
-            unicode_width::UnicodeWidthChar::width(*self).unwrap_or(1) as u16
+            unicode_width::UnicodeWidthChar::width(*self).unwrap_or(1)
         }
     }
 }
@@ -225,7 +225,7 @@ impl PageMovement for BoundedCursor {
 fn nth_position_width(buffer: &str, position: u16) -> u16 {
     buffer
         .chars()
-        .map(|ch| ch.width())
+        .map(|ch| ch.render_width() as u16)
         .scan(0u16, |st, width| {
             if position >= *st {
                 *st += width;
@@ -252,7 +252,7 @@ fn render_cursor<T: Cursor>(buffer: &str, cursor: &T) -> StaticCursor {
                     let tabstop = (crate::TAB_STOP as u16 - 1) - (*st % crate::TAB_STOP as u16) + 1;
                     (1, tabstop)
                 } else {
-                    let width = ch.width() as u16;
+                    let width = ch.render_width() as u16;
                     (width, width)
                 };
 
@@ -268,12 +268,12 @@ fn render_cursor<T: Cursor>(buffer: &str, cursor: &T) -> StaticCursor {
     StaticCursor(render_x, cursor.y())
 }
 
-pub fn cursor_to_char_index<T: Cursor>(cursor: &T, buffer: &str) -> usize {
+pub fn char_index(cursor: usize, buffer: &str) -> usize {
     buffer
         .chars()
-        .scan(0u16, |st, ch| {
-            if cursor.x() > *st {
-                *st += ch.width();
+        .scan(0, |st, ch| {
+            if cursor > *st {
+                *st += ch.render_width() as usize;
 
                 Some(ch.len_utf8())
             } else {
@@ -288,10 +288,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn cursor_to_char_index_should_return_byte_index_given_two_width_unicode() {
+    fn char_index_should_return_byte_index_given_unicode_char() {
         let input = "⛄";
 
-        let actual = cursor_to_char_index(&StaticCursor(1, 0), input);
+        let actual = char_index(1, input);
 
         assert_eq!(3, actual);
     }
