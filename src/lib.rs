@@ -15,7 +15,6 @@ use crossterm::{
     style::{Attribute, Print, SetAttribute},
     terminal::{Clear, ClearType},
 };
-use unicode_width::UnicodeWidthChar;
 
 use cursor::*;
 
@@ -64,32 +63,6 @@ impl Row {
                 c => c.to_string(),
             })
             .collect()
-    }
-
-    fn render_cursor<T: Cursor>(&self, cursor: &T) -> (u16, u16) {
-        let render_x = self
-            .buffer
-            .chars()
-            .scan(0, |st, ch| {
-                if cursor.x() > *st {
-                    let (width, render_width) = if ch == '\t' {
-                        let tabstop = (TAB_STOP as u16 - 1) - (*st % TAB_STOP as u16) + 1;
-                        (1, tabstop)
-                    } else {
-                        let width = ch.width().unwrap_or(1) as u16;
-                        (width, width)
-                    };
-
-                    *st += width;
-
-                    Some(render_width)
-                } else {
-                    None
-                }
-            })
-            .sum::<u16>();
-
-        (render_x, cursor.y())
     }
 }
 
