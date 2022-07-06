@@ -1,22 +1,6 @@
 use unicode_width::UnicodeWidthStr;
 
-use crate::Position;
-
-/// This trait is to determine the width of a character so that we can move the cursor
-/// properly. Some Unicode characters are more than one cursor wide.
-pub trait ConsoleWidth {
-    fn render_width(&self) -> usize;
-}
-
-impl ConsoleWidth for char {
-    fn render_width(&self) -> usize {
-        if *self == '\t' {
-            1
-        } else {
-            unicode_width::UnicodeWidthChar::width(*self).unwrap_or(1)
-        }
-    }
-}
+use crate::{text::ConsoleWidth, Position};
 
 pub trait Cursor {
     fn x(&self) -> u16;
@@ -81,7 +65,7 @@ impl BoundedCursor {
         self.buffer
             .borrow()
             .get(self.position.1 as usize)
-            .map(|row| render_cursor(&row.buffer, self.x() as usize, crate::TAB_STOP))
+            .map(|row| render_cursor(row.buffer(), self.x() as usize, crate::TAB_STOP))
             .unwrap_or(0)
     }
 
@@ -108,7 +92,7 @@ impl HorizontalMovement for BoundedCursor {
         let line = buf.get(self.position.1 as usize);
 
         let prev_width = line
-            .map(|row| nth_position_width(&row.buffer, self.position.0.saturating_sub(1)))
+            .map(|row| nth_position_width(row.buffer(), self.position.0.saturating_sub(1)))
             .unwrap_or(1);
 
         let (value, overflowed) = self.position.0.overflowing_sub(prev_width);
@@ -123,7 +107,7 @@ impl HorizontalMovement for BoundedCursor {
                 // and need to get the new line from the buffer
                 let column_width = buf
                     .get(self.position.1 as usize)
-                    .map(|row| column_width(&row.buffer))
+                    .map(|row| column_width(row.buffer()))
                     .unwrap_or(0);
 
                 self.position.0 = column_width;
@@ -138,11 +122,11 @@ impl HorizontalMovement for BoundedCursor {
         let line = buf.get(self.position.1 as usize);
 
         let next_width = line
-            .map(|row| nth_position_width(&row.buffer, self.position.0))
+            .map(|row| nth_position_width(row.buffer(), self.position.0))
             .unwrap_or(1);
 
         let value = self.position.0.saturating_add(next_width);
-        let column_width = line.map(|row| column_width(&row.buffer)).unwrap_or(0);
+        let column_width = line.map(|row| column_width(row.buffer())).unwrap_or(0);
 
         match (value > column_width, self.position.1) {
             (true, y) if y >= buf.len() as u16 => self.position.0 = column_width,
@@ -164,8 +148,8 @@ impl VerticalMovement for BoundedCursor {
             buffer
                 .get(self.position.1 as usize)
                 .map(|row| {
-                    let tabs = row.buffer.chars().filter(|c| *c == '\t').count() as u16;
-                    tabs + row.buffer.width() as u16
+                    let tabs = row.buffer().chars().filter(|c| *c == '\t').count() as u16;
+                    tabs + row.buffer().width() as u16
                 })
                 .unwrap_or(1),
         );
@@ -180,8 +164,8 @@ impl VerticalMovement for BoundedCursor {
             buffer
                 .get(self.position.1 as usize)
                 .map(|row| {
-                    let tabs = row.buffer.chars().filter(|c| *c == '\t').count() as u16;
-                    tabs + row.buffer.width() as u16
+                    let tabs = row.buffer().chars().filter(|c| *c == '\t').count() as u16;
+                    tabs + row.buffer().width() as u16
                 })
                 .unwrap_or(1),
         );
@@ -198,7 +182,7 @@ impl LineMovement for BoundedCursor {
             .buffer
             .borrow()
             .get(self.position.1 as usize)
-            .map(|row| column_width(&row.buffer))
+            .map(|row| column_width(row.buffer()))
             .unwrap_or(0);
         self.position.0 = last_column;
     }
@@ -264,34 +248,4 @@ fn render_cursor(buffer: &str, cursor: usize, tabstop: usize) -> usize {
             }
         })
         .sum()
-}
-
-pub fn char_index(cursor: usize, buffer: &str) -> usize {
-    buffer
-        .chars()
-        .scan(0, |st, ch| {
-            if cursor > *st {
-                *st += ch.render_width() as usize;
-
-                Some(ch.len_utf8())
-            } else {
-                None
-            }
-        })
-        .sum()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    use test_case::test_case;
-
-    #[test_case("⛄⛄", 4 => 6; "Two two-width, three byte")]
-    #[test_case("⛄", 2 => 3; "Single two-width, three byte")]
-    #[test_case("❄❄", 2 => 6; "Two one-width, three byte")]
-    #[test_case("❄", 1 => 3; "Single one-width, three byte")]
-    fn char_index_should_return_byte_index_given_unicode_char(input: &str, cursor: usize) -> usize {
-        char_index(cursor, input)
-    }
 }

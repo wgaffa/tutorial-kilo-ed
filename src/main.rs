@@ -8,6 +8,7 @@ use crossterm::{
 use error_stack::{IntoReport, ResultExt};
 
 use kilo_edit::{
+    buffer::Buffer,
     error::ApplicationError,
     input::{InputError, InputEvent, InputSystem},
     Editor,
@@ -28,11 +29,12 @@ fn main() -> error_stack::Result<(), ApplicationError> {
 
     let args = env::args().collect::<Vec<_>>();
     if args.len() >= 2 {
-        editor
-            .open(&args[1])
+        let buf = Buffer::
+            open(&args[1])
             .report()
             .change_context(ApplicationError)
             .attach_printable_lazy(|| format!("Unable to open the file: {}", args[1]))?;
+        editor.set_buffer(buf);
     }
 
     let input = InputSystem::new(tx);

@@ -1,12 +1,9 @@
 #![cfg_attr(feature = "extend_one", feature(extend_one))]
 
 use std::{
-    borrow::Cow,
     cell::RefCell,
     fmt,
-    fs,
     io::{self, Write},
-    path::Path,
     rc::Rc,
     time::SystemTime,
 };
@@ -18,22 +15,26 @@ use crossterm::{
     terminal::{Clear, ClearType},
 };
 
-use cursor::*;
-use input::{CursorEvent, InputEvent};
+use crate::{
+    cursor::*,
+    input::{CursorEvent, InputEvent},
+};
 
+pub mod buffer;
 pub mod cursor;
 pub mod error;
 pub mod input;
 pub mod macros;
 pub mod screen;
+pub mod text;
 
+use buffer::{Buffer, RowBufferRef};
 use cursor::Cursor;
 use screen::Screen;
 
 const TAB_STOP: usize = 8;
 const SPACES: &str = "                                                                                                                                ";
 
-type RowBufferRef = Rc<RefCell<Vec<Row>>>;
 type ScreenRef = Rc<RefCell<Screen>>;
 
 /// The position on screen or buffer. The tuple index represents the horizontal value
@@ -41,66 +42,10 @@ type ScreenRef = Rc<RefCell<Screen>>;
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Position(u16, u16);
 
-#[derive(Debug, Clone, Default)]
-struct Row {
-    buffer: String,
-}
-
-fn expand_tabs(buffer: &str, tab_stop: usize) -> Cow<str> {
-    let mut buf = String::with_capacity(buffer.len());
-    for ch in buffer.chars() {
-        if ch == '\t' {
-            let spaces = if tab_stop > SPACES.len() {
-                Cow::Owned(" ".repeat(tab_stop))
-            } else {
-                Cow::Borrowed(&SPACES[..tab_stop])
-            };
-            buf.push_str(&spaces);
-        } else {
-            buf.push(ch);
-        }
-    }
-
-    Cow::Borrowed(buffer)
-}
-
-impl Row {
-    fn new<T: Into<String>>(buffer: T) -> Self {
-        Self {
-            buffer: buffer.into(),
-        }
-    }
-
-    fn render_buffer(&self) -> Cow<str> {
-        for (i, ch) in self.buffer.chars().enumerate() {
-            if ch == '\t' {
-                let mut buf = String::with_capacity(self.buffer.len());
-                buf.push_str(&self.buffer[..i]);
-
-                #[cfg(feature = "extend_one")]
-                buf.extend_one(expand_tabs(&self.buffer[i..], TAB_STOP));
-
-                #[cfg(not(feature = "extend_one"))]
-                buf.extend(std::iter::once(expand_tabs(&self.buffer[i..], TAB_STOP)));
-
-                return Cow::Owned(buf);
-            }
-        }
-
-        Cow::Borrowed(&self.buffer)
-    }
-
-    fn insert(&mut self, index: usize, ch: char) {
-        self.buffer.insert(index, ch);
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct Editor {
     screen: ScreenRef,
-    cursor: BoundedCursor,
-    rows: RowBufferRef,
-    filename: Option<String>,
+    buffer: Buffer,
     status_message: String,
     status_time: SystemTime,
 }
@@ -109,25 +54,23 @@ impl Editor {
     pub fn new(cols: u16, rows: u16) -> Self {
         let mut me = Self {
             screen: Rc::new(RefCell::new(Screen::new(cols, rows))),
-            cursor: BoundedCursor::default(),
-            rows: Default::default(),
-            filename: None,
+            buffer: Default::default(),
             status_message: String::new(),
             status_time: SystemTime::now(),
         };
 
-        me.cursor.set_screen(Rc::clone(&me.screen));
-        me.cursor.set_buffer(Rc::clone(&me.rows));
+        me.buffer.cursor_mut().set_screen(Rc::clone(&me.screen));
 
         me
     }
 
     pub fn draw_rows<W: Write>(&self, writer: &mut W) -> io::Result<()> {
         let screen = self.screen.borrow();
+        let buf = self.buffer.buffer().borrow();
         for i in 0..screen.rows() {
             let file_row = i + screen.row_offset();
-            if file_row >= self.rows.borrow().len() as u16 {
-                if self.rows.borrow().is_empty() && i == (screen.rows() / 3) {
+            if file_row >= buf.len() as u16 {
+                if buf.is_empty() && i == (screen.rows() / 3) {
                     let message = self.message();
                     let padding = self.padding(message.len() as u16);
 
@@ -136,19 +79,17 @@ impl Editor {
                     write!(writer, "~")?;
                 }
             } else {
-                let len = self.rows.borrow()[file_row as usize]
+                let len = buf[file_row as usize]
                     .render_buffer()
                     .len()
                     .saturating_sub(screen.col_offset() as usize)
                     .min(screen.cols() as usize);
 
-                if self.rows.borrow()[file_row as usize].render_buffer().len()
-                    >= screen.col_offset() as usize
-                {
+                if buf[file_row as usize].render_buffer().len() >= screen.col_offset() as usize {
                     write!(
                         writer,
                         "{}",
-                        &self.rows.borrow()[file_row as usize].render_buffer()
+                        &buf[file_row as usize].render_buffer()
                             [(screen.col_offset() as usize)..screen.col_offset() as usize + len]
                     )?;
                 }
@@ -163,15 +104,16 @@ impl Editor {
 
     fn draw_status_bar<W: Write>(&self, writer: &mut W) -> io::Result<()> {
         const NO_NAME: &str = "[No Name]";
+        let buf = self.buffer.buffer().borrow();
         let filename = self
-            .filename
-            .as_ref()
+            .buffer
+            .filename()
             .map(|x| &x[..x.len().min(20)])
             .unwrap_or(NO_NAME);
 
-        let rows = self.rows.borrow().len();
+        let rows = buf.len();
         let left = format!("{} - {} lines", filename, rows);
-        let right = format!("{}/{}", self.cursor.y() + 1, rows);
+        let right = format!("{}/{}", self.buffer.cursor().y() + 1, rows);
 
         let fill_length =
             (self.screen.borrow().cols() as usize).saturating_sub(right.len() + left.len());
@@ -211,9 +153,9 @@ impl Editor {
 
     pub fn refresh<W: Write>(&mut self, writer: &mut W) -> crossterm::Result<()> {
         // Update the render cursor to match cursor position
-        let render_x = self.cursor.render() as u16;
+        let render_x = self.buffer.cursor().render() as u16;
 
-        self.screen.borrow_mut().scroll(render_x, self.cursor.y());
+        self.screen.borrow_mut().scroll(render_x, self.buffer.cursor().y());
         queue!(writer, MoveTo(0, 0), Hide)?;
 
         self.draw_rows(writer)?;
@@ -223,7 +165,7 @@ impl Editor {
             writer,
             MoveTo(
                 render_x - self.screen.borrow().col_offset(),
-                self.cursor.y() - self.screen.borrow().row_offset()
+                self.buffer.cursor().y() - self.screen.borrow().row_offset()
             ),
             Show
         )?;
@@ -238,6 +180,10 @@ impl Editor {
         self.status_time = SystemTime::now();
     }
 
+    pub fn set_buffer(&mut self, buf: Buffer) {
+        self.buffer = buf;
+    }
+
     pub fn process_event(&mut self, event: InputEvent) {
         macro_rules! cursor {
             ( $ev:tt ) => {
@@ -246,29 +192,17 @@ impl Editor {
         }
 
         match event {
-            cursor!(MoveLeft) => self.cursor.left(),
-            cursor!(MoveRight) => self.cursor.right(),
-            cursor!(MoveUp) => self.cursor.up(),
-            cursor!(MoveDown) => self.cursor.down(),
-            cursor!(MoveTop) => self.cursor.top(),
-            cursor!(MoveBottom) => self.cursor.bottom(),
-            cursor!(MoveBegin) => self.cursor.begin(),
-            cursor!(MoveEnd) => self.cursor.end(),
-            InputEvent::InsertChar(ch) => self.insert_char(ch),
+            cursor!(MoveLeft) => self.buffer.cursor_mut().left(),
+            cursor!(MoveRight) => self.buffer.cursor_mut().right(),
+            cursor!(MoveUp) => self.buffer.cursor_mut().up(),
+            cursor!(MoveDown) => self.buffer.cursor_mut().down(),
+            cursor!(MoveTop) => self.buffer.cursor_mut().top(),
+            cursor!(MoveBottom) => self.buffer.cursor_mut().bottom(),
+            cursor!(MoveBegin) => self.buffer.cursor_mut().begin(),
+            cursor!(MoveEnd) => self.buffer.cursor_mut().end(),
+            InputEvent::InsertChar(ch) => self.buffer.insert_char(ch),
             _ => {}
         }
-    }
-
-    pub fn open<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
-        let content = fs::read_to_string(&path)?;
-        self.rows = Rc::new(RefCell::new(content.lines().map(Row::new).collect()));
-        self.filename = Some(path.as_ref().to_string_lossy().into());
-        self.cursor.set_buffer(Rc::clone(&self.rows));
-        Ok(())
-    }
-
-    pub fn from_str(&mut self, contents: &str) {
-        self.rows = Rc::new(RefCell::new(contents.lines().map(Row::new).collect()));
     }
 
     fn padding(&self, message_len: u16) -> Padding {
@@ -284,26 +218,6 @@ impl Editor {
         } else {
             message
         }
-    }
-
-    fn insert_char(&mut self, ch: char) {
-        // We need to to get exclusive access to self.rows here,
-        // but self.cursor movement also has to get a references to row and
-        // this is why we need to make sure to drop the exclusive access before cursor tries
-        // to access it.
-        {
-            let mut buffer = self.rows.borrow_mut();
-            if self.cursor.y() as usize == buffer.len() {
-                buffer.push(Row::new(""));
-            }
-
-            let row = &mut buffer[self.cursor.y() as usize];
-            let index = char_index(self.cursor.x() as usize, &row.buffer);
-            row.insert(index, ch);
-        }
-
-        // Cursor borrows the buffer as mutable here as well
-        self.cursor.right();
     }
 }
 
