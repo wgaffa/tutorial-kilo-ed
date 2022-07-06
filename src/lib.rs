@@ -189,9 +189,9 @@ impl Editor {
 
     pub fn refresh<W: Write>(&mut self, writer: &mut W) -> crossterm::Result<()> {
         // Update the render cursor to match cursor position
-        let render = self.cursor.render();
+        let render_x = self.cursor.render() as u16;
 
-        self.screen.borrow_mut().scroll(&render);
+        self.screen.borrow_mut().scroll(render_x, self.cursor.y());
         queue!(writer, MoveTo(0, 0), Hide)?;
 
         self.draw_rows(writer)?;
@@ -200,7 +200,7 @@ impl Editor {
         queue!(
             writer,
             MoveTo(
-                render.x() - self.screen.borrow().col_offset(),
+                render_x - self.screen.borrow().col_offset(),
                 self.cursor.y() - self.screen.borrow().row_offset()
             ),
             Show

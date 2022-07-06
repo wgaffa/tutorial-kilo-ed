@@ -1,5 +1,3 @@
-use crate::cursor::Cursor;
-
 #[derive(Debug, Clone, Copy, Default)]
 struct ScreenSize(u16, u16);
 
@@ -30,21 +28,21 @@ impl Screen {
         self.offset.1
     }
 
-    pub fn scroll<T: Cursor>(&mut self, cursor: &T) {
-        if cursor.y() < self.row_offset() {
-            self.offset.1 = cursor.y();
+    pub fn scroll(&mut self, x: u16, y: u16) {
+        if y < self.row_offset() {
+            self.offset.1 = y;
         }
 
-        if cursor.y() >= self.row_offset() + self.rows() {
-            self.offset.1 = cursor.y() - self.rows() + 1;
+        if y >= self.row_offset() + self.rows() {
+            self.offset.1 = y - self.rows() + 1;
         }
 
-        if cursor.x() < self.col_offset() {
-            self.offset.0 = cursor.x();
+        if x < self.col_offset() {
+            self.offset.0 = x;
         }
 
-        if cursor.x() >= self.col_offset() + self.cols() {
-            self.offset.0 = cursor.x() - self.cols() + 1;
+        if x >= self.col_offset() + self.cols() {
+            self.offset.0 = x - self.cols() + 1;
         }
     }
 }

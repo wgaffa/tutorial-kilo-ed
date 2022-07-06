@@ -77,12 +77,12 @@ impl BoundedCursor {
         self.screen = screen;
     }
 
-    pub(crate) fn render(&self) -> impl Cursor {
+    pub(crate) fn render(&self) -> usize {
         self.buffer
             .borrow()
             .get(self.position.1 as usize)
-            .map(|row| render_cursor(&row.buffer, self))
-            .unwrap_or_else(|| StaticCursor(0, self.position.1))
+            .map(|row| render_cursor(&row.buffer, self.x() as usize, crate::TAB_STOP))
+            .unwrap_or(0)
     }
 
     pub fn position_mut(&mut self) -> &mut Position {
@@ -243,16 +243,16 @@ fn column_width(buffer: &str) -> u16 {
     tabs + buffer.width() as u16
 }
 
-fn render_cursor<T: Cursor>(buffer: &str, cursor: &T) -> StaticCursor {
-    let render_x = buffer
+fn render_cursor(buffer: &str, cursor: usize, tabstop: usize) -> usize {
+    buffer
         .chars()
         .scan(0, |st, ch| {
-            if cursor.x() > *st {
+            if cursor > *st {
                 let (width, render_width) = if ch == '\t' {
-                    let tabstop = (crate::TAB_STOP as u16 - 1) - (*st % crate::TAB_STOP as u16) + 1;
+                    let tabstop = (tabstop - 1) - (*st % tabstop) + 1;
                     (1, tabstop)
                 } else {
-                    let width = ch.render_width() as u16;
+                    let width = ch.render_width();
                     (width, width)
                 };
 
@@ -263,9 +263,7 @@ fn render_cursor<T: Cursor>(buffer: &str, cursor: &T) -> StaticCursor {
                 None
             }
         })
-        .sum::<u16>();
-
-    StaticCursor(render_x, cursor.y())
+        .sum()
 }
 
 pub fn char_index(cursor: usize, buffer: &str) -> usize {
