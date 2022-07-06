@@ -6,7 +6,7 @@ use error_stack::{IntoReport, Result, ResultExt};
 
 use crate::match_key;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CursorEvent {
     MoveUp,
     MoveDown,
@@ -18,13 +18,13 @@ pub enum CursorEvent {
     MoveBottom,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputEvent {
     CursorEvent(CursorEvent),
     Quit,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputError {
     ReadFailure,
     SendError(InputEvent),
@@ -50,7 +50,7 @@ impl InputSystem {
         Self { sender }
     }
 
-    pub fn process_key(&mut self) -> Result<(), InputError> {
+    pub fn process_key(&self) -> Result<(), InputError> {
         let key = event::read()
             .report()
             .change_context(InputError::ReadFailure)?;

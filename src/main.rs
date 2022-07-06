@@ -1,12 +1,17 @@
 use std::{env, io};
 
+use async_std::channel::{self, TryRecvError};
 use crossterm::{
     execute,
     terminal::{self, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use error_stack::{IntoReport, ResultExt};
 
-use kilo_edit::{error::ApplicationError, Editor};
+use kilo_edit::{
+    error::ApplicationError,
+    input::{InputError, InputEvent, InputSystem},
+    Editor,
+};
 
 fn main() -> error_stack::Result<(), ApplicationError> {
     startup()
@@ -19,6 +24,8 @@ fn main() -> error_stack::Result<(), ApplicationError> {
         .change_context(ApplicationError)
         .attach_printable("Failed to initialize editor")?;
 
+    let (tx, rx) = channel::bounded(5);
+
     let args = env::args().collect::<Vec<_>>();
     if args.len() >= 2 {
         editor
@@ -28,18 +35,54 @@ fn main() -> error_stack::Result<(), ApplicationError> {
             .attach_printable_lazy(|| format!("Unable to open the file: {}", args[1]))?;
     }
 
+    let input = InputSystem::new(tx);
+
     loop {
         if let Err(e) = editor.refresh(&mut io::stdout()) {
             cleanup()
                 .report()
                 .change_context(ApplicationError)
                 .attach_printable("Failed to do terminal cleanup")?;
+
             return Err(error_stack::report!(ApplicationError)
                 .attach_printable(format!("Unable to refresh screen: {}", e)));
         }
 
-        if !editor.process_key() {
-            break;
+        let res = input.process_key();
+        if let Err(err) = res {
+            match *err.current_context() {
+                InputError::ReadFailure => {
+                    eprintln!("Something went wrong when trying to read your input. Quitting.");
+                    return Err(err)
+                        .change_context(ApplicationError)
+                        .attach_printable("Terminal could not read from input");
+                }
+                InputError::SendError(event) => {
+                    // If our receiver is dead we can't get any quit events so we need to preemptively quit as well
+                    if rx.is_closed() {
+                        eprintln!(
+                            "Our channel to the input system is closed unexpectedly. Quitting"
+                        );
+
+                        return Err(err).change_context(ApplicationError).attach_printable(
+                            format!(
+                                "Receiver is closed and Sender could not send the event \
+                                 '{event:?}'"
+                            ),
+                        );
+                    }
+                }
+            }
+        }
+
+        match rx.try_recv() {
+            Ok(InputEvent::Quit) => break,
+            Ok(event) => editor.process_event(event),
+            Err(TryRecvError::Closed) => {
+                eprintln!("InputSystem closed unexpectedly, Quitting");
+                break;
+            }
+            _ => {}
         }
     }
 

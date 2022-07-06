@@ -10,20 +10,19 @@ use std::{
 
 use crossterm::{
     cursor::{Hide, MoveTo, Show},
-    event,
-    event::{Event, KeyCode, KeyEvent, KeyModifiers},
     queue,
     style::{Attribute, Print, SetAttribute},
     terminal::{Clear, ClearType},
 };
 
 use cursor::*;
+use input::{CursorEvent, InputEvent};
 
 pub mod cursor;
 pub mod error;
+pub mod input;
 pub mod macros;
 pub mod screen;
-pub mod input;
 
 use cursor::Cursor;
 use screen::Screen;
@@ -216,52 +215,24 @@ impl Editor {
         self.status_time = SystemTime::now();
     }
 
-    pub fn process_key(&mut self) -> bool {
-        match event::read() {
-            Ok(match_key!(KeyCode::Char('q'), KeyModifiers::CONTROL)) => return false,
-            Ok(Event::Key(KeyEvent { code, .. }))
-                if matches!(code, KeyCode::Left) =>
-            {
-                self.cursor.left()
-            }
-            Ok(Event::Key(KeyEvent { code, .. }))
-                if matches!(code, KeyCode::Right) =>
-            {
-                self.cursor.right()
-            }
-            Ok(Event::Key(KeyEvent { code, .. }))
-                if matches!(code, KeyCode::Up) =>
-            {
-                self.cursor.up()
-            }
-            Ok(Event::Key(KeyEvent { code, .. }))
-                if matches!(code, KeyCode::Down) =>
-            {
-                self.cursor.down()
-            }
-            Ok(Event::Key(KeyEvent {
-                code: KeyCode::PageUp,
-                ..
-            })) => self.cursor.top(),
-            Ok(Event::Key(KeyEvent {
-                code: KeyCode::PageDown,
-                ..
-            })) => self.cursor.bottom(),
-            Ok(Event::Key(KeyEvent {
-                code: KeyCode::Home,
-                ..
-            })) => self.cursor.begin(),
-            Ok(Event::Key(KeyEvent {
-                code: KeyCode::End, ..
-            })) => self.cursor.end(),
-            Ok(Event::Key(KeyEvent {
-                code: KeyCode::Char(ch),
-                ..
-            })) => self.insert_char(ch),
-            _ => {}
+    pub fn process_event(&mut self, event: InputEvent) {
+        macro_rules! cursor {
+            ( $ev:tt ) => {
+                InputEvent::CursorEvent(CursorEvent::$ev)
+            };
         }
 
-        true
+        match event {
+            cursor!(MoveLeft) => self.cursor.left(),
+            cursor!(MoveRight) => self.cursor.right(),
+            cursor!(MoveUp) => self.cursor.up(),
+            cursor!(MoveDown) => self.cursor.down(),
+            cursor!(MoveTop) => self.cursor.top(),
+            cursor!(MoveBottom) => self.cursor.bottom(),
+            cursor!(MoveBegin) => self.cursor.begin(),
+            cursor!(MoveEnd) => self.cursor.end(),
+            _ => {}
+        }
     }
 
     pub fn open<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
