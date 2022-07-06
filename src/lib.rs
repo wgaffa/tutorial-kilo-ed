@@ -141,8 +141,7 @@ impl Editor {
 
         let fill_length =
             (self.screen.borrow().cols() as usize).saturating_sub(right.len() + left.len());
-        const SPACES: &str = "                                                                    \
-                                                                                          ";
+        const SPACES: &str = "                                                                                                                                ";
         let modeline = if fill_length < SPACES.len() {
             format!("{left:<}{}{right:>}", &SPACES[..fill_length])
         } else {
