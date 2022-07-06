@@ -78,8 +78,7 @@ impl BoundedCursor {
     }
 
     pub(crate) fn render(&self) -> impl Cursor {
-        self
-            .buffer
+        self.buffer
             .borrow()
             .get(self.position.1 as usize)
             .map(|row| render_cursor(&row.buffer, self))
@@ -267,4 +266,33 @@ fn render_cursor<T: Cursor>(buffer: &str, cursor: &T) -> StaticCursor {
         .sum::<u16>();
 
     StaticCursor(render_x, cursor.y())
+}
+
+pub fn cursor_to_char_index<T: Cursor>(cursor: &T, buffer: &str) -> usize {
+    buffer
+        .chars()
+        .scan(0u16, |st, ch| {
+            if cursor.x() > *st {
+                *st += ch.width();
+
+                Some(ch.len_utf8())
+            } else {
+                None
+            }
+        })
+        .sum()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cursor_to_char_index_should_return_byte_index_given_two_width_unicode() {
+        let input = "⛄";
+
+        let actual = cursor_to_char_index(&StaticCursor(1, 0), input);
+
+        assert_eq!(3, actual);
+    }
 }

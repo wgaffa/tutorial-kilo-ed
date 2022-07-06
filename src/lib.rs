@@ -94,6 +94,7 @@ impl Editor {
         };
 
         me.cursor.set_screen(Rc::clone(&me.screen));
+        me.cursor.set_buffer(Rc::clone(&me.rows));
 
         me
     }
@@ -231,6 +232,7 @@ impl Editor {
             cursor!(MoveBottom) => self.cursor.bottom(),
             cursor!(MoveBegin) => self.cursor.begin(),
             cursor!(MoveEnd) => self.cursor.end(),
+            InputEvent::InsertChar(ch) => self.insert_char(ch),
             _ => {}
         }
     }
@@ -263,14 +265,22 @@ impl Editor {
     }
 
     fn insert_char(&mut self, ch: char) {
+        // We need to to get exclusive access to self.rows here,
+        // but self.cursor movement also has to get a references to row and
+        // this is why we need to make sure to drop the exclusive access before cursor tries
+        // to access it.
         {
             let mut buffer = self.rows.borrow_mut();
             if self.cursor.y() as usize == buffer.len() {
                 buffer.push(Row::new(""));
             }
 
-            buffer[self.cursor.y() as usize].insert(self.cursor.x() as usize, ch);
+            let row = &mut buffer[self.cursor.y() as usize];
+            let index = cursor_to_char_index(&self.cursor, &row.buffer);
+            row.insert(index, ch);
         }
+
+        // Cursor borrows the buffer as mutable here as well
         self.cursor.right();
     }
 }

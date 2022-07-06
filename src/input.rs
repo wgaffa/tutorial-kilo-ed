@@ -21,6 +21,7 @@ pub enum CursorEvent {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputEvent {
     CursorEvent(CursorEvent),
+    InsertChar(char),
     Quit,
 }
 
@@ -57,22 +58,15 @@ impl InputSystem {
 
         let event = match key {
             match_key!(KeyCode::Char('q'), KeyModifiers::CONTROL) => Some(InputEvent::Quit),
-            match_key!(code) if matches!(code, KeyCode::Left | KeyCode::Char('a')) => {
-                Some(InputEvent::CursorEvent(CursorEvent::MoveLeft))
-            }
-            match_key!(code) if matches!(code, KeyCode::Right | KeyCode::Char('d')) => {
-                Some(InputEvent::CursorEvent(CursorEvent::MoveRight))
-            }
-            match_key!(code) if matches!(code, KeyCode::Up | KeyCode::Char('w')) => {
-                Some(InputEvent::CursorEvent(CursorEvent::MoveUp))
-            }
-            match_key!(code) if matches!(code, KeyCode::Down | KeyCode::Char('s')) => {
-                Some(InputEvent::CursorEvent(CursorEvent::MoveDown))
-            }
+            match_key!(KeyCode::Left) => Some(InputEvent::CursorEvent(CursorEvent::MoveLeft)),
+            match_key!(KeyCode::Right) => Some(InputEvent::CursorEvent(CursorEvent::MoveRight)),
+            match_key!(KeyCode::Up) => Some(InputEvent::CursorEvent(CursorEvent::MoveUp)),
+            match_key!(KeyCode::Down) => Some(InputEvent::CursorEvent(CursorEvent::MoveDown)),
             match_key!(KeyCode::PageUp) => Some(InputEvent::CursorEvent(CursorEvent::MoveTop)),
             match_key!(KeyCode::PageDown) => Some(InputEvent::CursorEvent(CursorEvent::MoveBottom)),
             match_key!(KeyCode::Home) => Some(InputEvent::CursorEvent(CursorEvent::MoveBegin)),
             match_key!(KeyCode::End) => Some(InputEvent::CursorEvent(CursorEvent::MoveEnd)),
+            match_key!(KeyCode::Char(ch)) => Some(InputEvent::InsertChar(ch)),
             _ => None,
         };
 
