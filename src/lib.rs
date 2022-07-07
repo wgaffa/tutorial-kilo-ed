@@ -1,4 +1,7 @@
+#![cfg_attr(feature = "extend_one", feature(extend_one))]
+
 use std::{
+    borrow::Cow,
     cell::RefCell,
     fmt,
     fs,
@@ -28,6 +31,7 @@ use cursor::Cursor;
 use screen::Screen;
 
 const TAB_STOP: usize = 8;
+const SPACES: &str = "                                                                                                                                ";
 
 type RowBufferRef = Rc<RefCell<Vec<Row>>>;
 type ScreenRef = Rc<RefCell<Screen>>;
@@ -40,35 +44,54 @@ pub struct Position(u16, u16);
 #[derive(Debug, Clone, Default)]
 struct Row {
     buffer: String,
-    render: String,
+}
+
+fn expand_tabs(buffer: &str, tab_stop: usize) -> Cow<str> {
+    let mut buf = String::with_capacity(buffer.len());
+    for ch in buffer.chars() {
+        if ch == '\t' {
+            let spaces = if tab_stop > SPACES.len() {
+                Cow::Owned(" ".repeat(tab_stop))
+            } else {
+                Cow::Borrowed(&SPACES[..tab_stop])
+            };
+            buf.push_str(&spaces);
+        } else {
+            buf.push(ch);
+        }
+    }
+
+    Cow::Borrowed(buffer)
 }
 
 impl Row {
     fn new<T: Into<String>>(buffer: T) -> Self {
-        let mut row = Self {
+        Self {
             buffer: buffer.into(),
-            render: String::new(),
-        };
-
-        row.update();
-        row
+        }
     }
 
-    /// Updates the render buffer
-    fn update(&mut self) {
-        self.render = self
-            .buffer
-            .chars()
-            .map(|x| match x {
-                '\t' => " ".repeat(TAB_STOP),
-                c => c.to_string(),
-            })
-            .collect()
+    fn render_buffer(&self) -> Cow<str> {
+        for (i, ch) in self.buffer.chars().enumerate() {
+            if ch == '\t' {
+                let mut buf = String::with_capacity(self.buffer.len());
+                buf.push_str(&self.buffer[..i]);
+
+                #[cfg(feature = "extend_one")]
+                buf.extend_one(expand_tabs(&self.buffer[i..], TAB_STOP));
+
+                #[cfg(not(feature = "extend_one"))]
+                buf.extend(std::iter::once(expand_tabs(&self.buffer[i..], TAB_STOP)));
+
+                return Cow::Owned(buf);
+            }
+        }
+
+        Cow::Borrowed(&self.buffer)
     }
 
     fn insert(&mut self, index: usize, ch: char) {
         self.buffer.insert(index, ch);
-        self.update();
     }
 }
 
@@ -114,18 +137,18 @@ impl Editor {
                 }
             } else {
                 let len = self.rows.borrow()[file_row as usize]
-                    .render
+                    .render_buffer()
                     .len()
                     .saturating_sub(screen.col_offset() as usize)
                     .min(screen.cols() as usize);
 
-                if self.rows.borrow()[file_row as usize].render.len()
+                if self.rows.borrow()[file_row as usize].render_buffer().len()
                     >= screen.col_offset() as usize
                 {
                     write!(
                         writer,
                         "{}",
-                        &self.rows.borrow()[file_row as usize].render
+                        &self.rows.borrow()[file_row as usize].render_buffer()
                             [(screen.col_offset() as usize)..screen.col_offset() as usize + len]
                     )?;
                 }
@@ -152,7 +175,6 @@ impl Editor {
 
         let fill_length =
             (self.screen.borrow().cols() as usize).saturating_sub(right.len() + left.len());
-        const SPACES: &str = "                                                                                                                                ";
         let modeline = if fill_length < SPACES.len() {
             format!("{left:<}{}{right:>}", &SPACES[..fill_length])
         } else {

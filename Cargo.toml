@@ -19,6 +19,10 @@ quickcheck = "1.0.3"
 quickcheck_macros = "1.0.0"
 test-case = "2.1.0"
 
+[features]
+extend_one = []
+nightly = ["extend_one"]
+
 [[bench]]
 name = "editor_benchmark"
 harness = false
