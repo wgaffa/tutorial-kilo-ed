@@ -18,6 +18,8 @@ use crossterm::{
 use crate::{
     cursor::*,
     input::{CursorEvent, InputEvent},
+    buffer::{Buffer, RowBufferRef},
+    screen::Screen,
 };
 
 pub mod buffer;
@@ -28,9 +30,6 @@ pub mod macros;
 pub mod screen;
 pub mod text;
 
-use buffer::{Buffer, RowBufferRef};
-use cursor::Cursor;
-use screen::Screen;
 
 const TAB_STOP: usize = 8;
 const SPACES: &str = "                                                                                                                                ";
@@ -48,6 +47,7 @@ pub struct Editor {
     buffer: Buffer,
     status_message: String,
     status_time: SystemTime,
+    cursor: BoundedCursor,
 }
 
 impl Editor {
@@ -57,9 +57,11 @@ impl Editor {
             buffer: Default::default(),
             status_message: String::new(),
             status_time: SystemTime::now(),
+            cursor: Default::default(),
         };
 
-        me.buffer.cursor_mut().set_screen(Rc::clone(&me.screen));
+        me.cursor.set_buffer(Rc::clone(me.buffer.buffer()));
+        me.cursor.set_screen(Rc::clone(&me.screen));
 
         me
     }
@@ -113,7 +115,7 @@ impl Editor {
 
         let rows = buf.len();
         let left = format!("{} - {} lines", filename, rows);
-        let right = format!("{}/{}", self.buffer.cursor().y() + 1, rows);
+        let right = format!("{}/{}", self.cursor.y() + 1, rows);
 
         let fill_length =
             (self.screen.borrow().cols() as usize).saturating_sub(right.len() + left.len());
@@ -153,9 +155,9 @@ impl Editor {
 
     pub fn refresh<W: Write>(&mut self, writer: &mut W) -> crossterm::Result<()> {
         // Update the render cursor to match cursor position
-        let render_x = self.buffer.cursor().render() as u16;
+        let render_x = self.cursor.render() as u16;
 
-        self.screen.borrow_mut().scroll(render_x, self.buffer.cursor().y());
+        self.screen.borrow_mut().scroll(render_x, self.cursor.y());
         queue!(writer, MoveTo(0, 0), Hide)?;
 
         self.draw_rows(writer)?;
@@ -165,7 +167,7 @@ impl Editor {
             writer,
             MoveTo(
                 render_x - self.screen.borrow().col_offset(),
-                self.buffer.cursor().y() - self.screen.borrow().row_offset()
+                self.cursor.y() - self.screen.borrow().row_offset()
             ),
             Show
         )?;
@@ -182,6 +184,7 @@ impl Editor {
 
     pub fn set_buffer(&mut self, buf: Buffer) {
         self.buffer = buf;
+        self.cursor.set_buffer(Rc::clone(self.buffer.buffer()));
     }
 
     pub fn process_event(&mut self, event: InputEvent) {
@@ -192,14 +195,14 @@ impl Editor {
         }
 
         match event {
-            cursor!(MoveLeft) => self.buffer.cursor_mut().left(),
-            cursor!(MoveRight) => self.buffer.cursor_mut().right(),
-            cursor!(MoveUp) => self.buffer.cursor_mut().up(),
-            cursor!(MoveDown) => self.buffer.cursor_mut().down(),
-            cursor!(MoveTop) => self.buffer.cursor_mut().top(),
-            cursor!(MoveBottom) => self.buffer.cursor_mut().bottom(),
-            cursor!(MoveBegin) => self.buffer.cursor_mut().begin(),
-            cursor!(MoveEnd) => self.buffer.cursor_mut().end(),
+            cursor!(MoveLeft) => self.cursor.left(),
+            cursor!(MoveRight) => self.cursor.right(),
+            cursor!(MoveUp) => self.cursor.up(),
+            cursor!(MoveDown) => self.cursor.down(),
+            cursor!(MoveTop) => self.cursor.top(),
+            cursor!(MoveBottom) => self.cursor.bottom(),
+            cursor!(MoveBegin) => self.cursor.begin(),
+            cursor!(MoveEnd) => self.cursor.end(),
             InputEvent::InsertChar(ch) => self.buffer.insert_char(ch),
             _ => {}
         }

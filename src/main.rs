@@ -31,7 +31,6 @@ fn main() -> error_stack::Result<(), ApplicationError> {
     if args.len() >= 2 {
         let buf = Buffer::
             open(&args[1])
-            .report()
             .change_context(ApplicationError)
             .attach_printable_lazy(|| format!("Unable to open the file: {}", args[1]))?;
         editor.set_buffer(buf);

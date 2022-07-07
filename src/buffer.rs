@@ -1,6 +1,6 @@
-use std::{borrow::Cow, cell::RefCell, fs, path::Path, rc::Rc};
+use std::{borrow::Cow, cell::RefCell, fmt, fs, path::Path, rc::Rc};
 
-use error_stack::Result;
+use error_stack::{IntoReport, Result, ResultExt};
 
 use crate::{
     cursor::{BoundedCursor, Cursor, HorizontalMovement},
@@ -74,6 +74,21 @@ impl<T: Into<String>> From<T> for Row {
     }
 }
 
+#[derive(Debug)]
+pub enum BufferError {
+    FailedToOpen(String),
+}
+
+impl std::error::Error for BufferError {}
+
+impl fmt::Display for BufferError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::FailedToOpen(path) => write!(f, "Unable to open file {path}"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Buffer {
     buffer: RowBufferRef,
@@ -82,8 +97,13 @@ pub struct Buffer {
 }
 
 impl Buffer {
-    pub fn open<P: AsRef<Path>>(path: P) -> std::io::Result<Buffer> {
-        let content = fs::read_to_string(&path)?;
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, BufferError> {
+        let content =
+            fs::read_to_string(&path)
+                .report()
+                .change_context(BufferError::FailedToOpen(
+                    path.as_ref().to_string_lossy().to_string(),
+                ))?;
 
         let mut me = Self {
             buffer: Rc::new(RefCell::new(content.lines().map(Row::new).collect())),
@@ -104,12 +124,12 @@ impl Buffer {
         &self.buffer
     }
 
-    pub fn cursor(&self) -> &BoundedCursor {
-        &self.cursor
+    pub fn save_cursor(&mut self, cursor: BoundedCursor) {
+        self.cursor = cursor;
     }
 
-    pub fn cursor_mut(&mut self) -> &mut BoundedCursor {
-        &mut self.cursor
+    pub fn take_cursor(&mut self) -> BoundedCursor {
+        std::mem::take(&mut self.cursor)
     }
 
     pub fn insert_char(&mut self, ch: char) {

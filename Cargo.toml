@@ -8,13 +8,10 @@ edition = "2021"
 [dependencies]
 async-std = { version = "1.12.0", features = ["attributes"] }
 crossterm = "0.23.2"
-errno = "0.2.8"
 error-stack = "0.1.1"
 unicode-width = "0.1.9"
 
 [dev-dependencies]
-criterion = "0.3.5"
-plotters = "0.3.1"
 quickcheck = "1.0.3"
 quickcheck_macros = "1.0.0"
 test-case = "2.1.0"
@@ -22,7 +19,3 @@ test-case = "2.1.0"
 [features]
 extend_one = []
 nightly = ["extend_one"]
-
-[[bench]]
-name = "editor_benchmark"
-harness = false
