@@ -10,7 +10,7 @@ use crate::{
 
 pub type RowBufferRef = Rc<RefCell<Vec<Row>>>;
 
-fn expand_tabs(buffer: &str, tab_stop: usize) -> Cow<str> {
+fn expand_tabs(buffer: &str, tab_stop: usize) -> String {
     let mut buf = String::with_capacity(buffer.len());
     for ch in buffer.chars() {
         if ch == '\t' {
@@ -25,7 +25,7 @@ fn expand_tabs(buffer: &str, tab_stop: usize) -> Cow<str> {
         }
     }
 
-    Cow::Borrowed(buffer)
+    buf
 }
 
 #[derive(Debug, Clone, Default)]
