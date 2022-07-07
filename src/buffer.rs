@@ -77,6 +77,8 @@ impl<T: Into<String>> From<T> for Row {
 #[derive(Debug)]
 pub enum BufferError {
     FailedToOpen(String),
+    FailedToSave(String),
+    NoFilename,
 }
 
 impl std::error::Error for BufferError {}
@@ -85,6 +87,8 @@ impl fmt::Display for BufferError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::FailedToOpen(path) => write!(f, "Unable to open file {path}"),
+            Self::FailedToSave(path) => write!(f, "Unable to save file {path}"),
+            Self::NoFilename => f.write_str("No filename was given")
         }
     }
 }
@@ -114,6 +118,23 @@ impl Buffer {
         me.cursor.set_buffer(Rc::clone(&me.buffer));
 
         Ok(me)
+    }
+
+    pub fn save(&self) -> Result<(), BufferError> {
+        if let Some(filename) = &self.filename {
+            let contents = self
+                .buffer
+                .borrow()
+                .iter()
+                .map(|row| row.buffer())
+                .collect::<String>();
+
+            fs::write(filename, &contents)
+                .report()
+                .change_context_lazy(|| BufferError::FailedToSave(filename.clone()))
+        } else {
+            error_stack::bail!(BufferError::NoFilename)
+        }
     }
 
     pub fn filename(&self) -> Option<&String> {

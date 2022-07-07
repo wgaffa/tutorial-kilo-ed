@@ -4,6 +4,7 @@ use std::{
     cell::RefCell,
     fmt,
     io::{self, Write},
+    path::Path,
     rc::Rc,
     time::SystemTime,
 };
@@ -16,7 +17,7 @@ use crossterm::{
 };
 
 use crate::{
-    buffer::{Buffer, RowBufferRef},
+    buffer::{Buffer, RowBufferRef, Row},
     cursor::*,
     input::{CursorEvent, InputEvent},
     screen::Screen,
