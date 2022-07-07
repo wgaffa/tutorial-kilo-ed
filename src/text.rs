@@ -38,6 +38,23 @@ impl ConsoleWidthStr for str {
     }
 }
 
+pub fn nth_position_width(buffer: &str, position: usize) -> usize {
+    buffer
+        .chars()
+        .map(|ch| ch.render_width())
+        .scan(0, |st, width| {
+            if position >= *st {
+                *st += width;
+                Some(width)
+            } else {
+                None
+            }
+        })
+        .last()
+        .unwrap_or(1)
+}
+
+
 pub fn char_index(cursor: usize, buffer: &str) -> usize {
     buffer
         .chars()

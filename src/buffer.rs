@@ -3,7 +3,8 @@ use std::{borrow::Cow, cell::RefCell, fmt, fs, path::Path, rc::Rc};
 use error_stack::{IntoReport, Result, ResultExt};
 
 use crate::{
-    cursor::{BoundedCursor, Cursor},
+    cursor::{BoundedCursor, Cursor, HorizontalMovement},
+    text::{char_index, ConsoleWidthChar},
     SPACES,
     TAB_STOP,
 };
@@ -66,6 +67,10 @@ impl Row {
     pub fn buffer(&self) -> &str {
         &self.buffer
     }
+
+    fn inner_mut(&mut self) -> &mut String {
+        &mut self.buffer
+    }
 }
 
 impl<T: Into<String>> From<T> for Row {
@@ -88,7 +93,7 @@ impl fmt::Display for BufferError {
         match self {
             Self::FailedToOpen(path) => write!(f, "Unable to open file {path}"),
             Self::FailedToSave(path) => write!(f, "Unable to save file {path}"),
-            Self::NoFilename => f.write_str("No filename was given")
+            Self::NoFilename => f.write_str("No filename was given"),
         }
     }
 }
@@ -177,6 +182,39 @@ impl Buffer {
         row.insert(index, ch);
 
         self.state = BufferState::Modified;
+    }
+
+    pub fn delete_char<T: Cursor + HorizontalMovement>(&mut self, cursor: &mut T) {
+        let move_cursor = {
+            let mut buf = self.buffer.borrow_mut();
+            if cursor.y() == buf.len() as u16 {
+                return;
+            }
+
+            if cursor.x() > 0 {
+                let line = &mut buf[cursor.y() as usize];
+
+                let mut index = char_index(cursor.x() as usize, line.buffer());
+                let width_of_prev_char = line.buffer()[..index]
+                    .chars()
+                    .last()
+                    .map(|x| x.render_width())
+                    .unwrap_or(1);
+                index = char_index(cursor.x() as usize - width_of_prev_char, line.buffer());
+
+                line.inner_mut().remove(index);
+
+                self.state = BufferState::Modified;
+
+                width_of_prev_char
+            } else {
+                0
+            }
+        };
+
+        for _ in 0..move_cursor {
+            cursor.left()
+        }
     }
 
     pub fn state(&self) -> BufferState {

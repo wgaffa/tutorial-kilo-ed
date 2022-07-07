@@ -246,6 +246,9 @@ impl Editor {
                     self.buffer.filename_str().unwrap_or("??")
                 ))
             }
+            InputEvent::DeletePreviousChar => {
+                self.buffer.delete_char(&mut self.cursor);
+            }
             _ => {}
         }
 

@@ -1,4 +1,4 @@
-use crate::{text::{ConsoleWidthChar, ConsoleWidthStr}, Position};
+use crate::{text::{ConsoleWidthChar, ConsoleWidthStr, nth_position_width}, Position};
 
 pub trait Cursor {
     fn x(&self) -> u16;
@@ -90,7 +90,7 @@ impl HorizontalMovement for BoundedCursor {
         let line = buf.get(self.position.1 as usize);
 
         let prev_width = line
-            .map(|row| nth_position_width(row.buffer(), self.position.0.saturating_sub(1)))
+            .map(|row| nth_position_width(row.buffer(), self.position.0.saturating_sub(1) as usize) as u16)
             .unwrap_or(1);
 
         let (value, overflowed) = self.position.0.overflowing_sub(prev_width);
@@ -120,7 +120,7 @@ impl HorizontalMovement for BoundedCursor {
         let line = buf.get(self.position.1 as usize);
 
         let next_width = line
-            .map(|row| nth_position_width(row.buffer(), self.position.0))
+            .map(|row| nth_position_width(row.buffer(), self.position.0 as usize) as u16)
             .unwrap_or(1);
 
         let value = self.position.0.saturating_add(next_width);
@@ -196,22 +196,6 @@ impl PageMovement for BoundedCursor {
 
         self.position.1 = self.position.1.saturating_add(screen.rows()).min(lines);
     }
-}
-
-fn nth_position_width(buffer: &str, position: u16) -> u16 {
-    buffer
-        .chars()
-        .map(|ch| ch.render_width() as u16)
-        .scan(0u16, |st, width| {
-            if position >= *st {
-                *st += width;
-                Some(width)
-            } else {
-                None
-            }
-        })
-        .last()
-        .unwrap_or(1)
 }
 
 fn render_cursor(buffer: &str, cursor: usize, tabstop: usize) -> usize {
