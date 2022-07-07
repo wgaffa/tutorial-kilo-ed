@@ -4,7 +4,6 @@ use std::{
     cell::RefCell,
     fmt,
     io::{self, Write},
-    path::Path,
     rc::Rc,
     time::SystemTime,
 };
@@ -15,9 +14,10 @@ use crossterm::{
     style::{Attribute, Print, SetAttribute},
     terminal::{Clear, ClearType},
 };
+use error_stack::{Result, ResultExt};
 
 use crate::{
-    buffer::{Buffer, RowBufferRef, Row},
+    buffer::{Buffer, RowBufferRef},
     cursor::*,
     input::{CursorEvent, InputEvent},
     screen::Screen,
@@ -40,6 +40,21 @@ type ScreenRef = Rc<RefCell<Screen>>;
 /// x or column while the vertical is y or rows for example.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Position(u16, u16);
+
+#[derive(Debug)]
+pub enum EditorEventError {
+    SaveBuffer,
+}
+
+impl std::error::Error for EditorEventError {}
+
+impl fmt::Display for EditorEventError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::SaveBuffer => f.write_str("Unable to save buffer"),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Editor {
@@ -187,7 +202,7 @@ impl Editor {
         self.cursor.set_buffer(Rc::clone(self.buffer.buffer()));
     }
 
-    pub fn process_event(&mut self, event: InputEvent) {
+    pub fn process_event(&mut self, event: InputEvent) -> Result<(), EditorEventError> {
         macro_rules! cursor {
             ( $ev:tt ) => {
                 InputEvent::CursorEvent(CursorEvent::$ev)
@@ -207,8 +222,17 @@ impl Editor {
                 self.buffer.insert_char(ch, &self.cursor);
                 self.cursor.right()
             }
+            InputEvent::SaveBuffer => self
+                .buffer
+                .save()
+                .change_context(EditorEventError::SaveBuffer)
+                .attach_printable_lazy(|| {
+                    format!("Failed to save buffer to {:?}", self.buffer.filename())
+                })?,
             _ => {}
         }
+
+        Ok(())
     }
 
     fn padding(&self, message_len: u16) -> Padding {

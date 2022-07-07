@@ -29,8 +29,7 @@ fn main() -> error_stack::Result<(), ApplicationError> {
 
     let args = env::args().collect::<Vec<_>>();
     if args.len() >= 2 {
-        let buf = Buffer::
-            open(&args[1])
+        let buf = Buffer::open(&args[1])
             .change_context(ApplicationError)
             .attach_printable_lazy(|| format!("Unable to open the file: {}", args[1]))?;
         editor.set_buffer(buf);
@@ -78,7 +77,13 @@ fn main() -> error_stack::Result<(), ApplicationError> {
 
         match rx.try_recv() {
             Ok(InputEvent::Quit) => break,
-            Ok(event) => editor.process_event(event),
+            Ok(event) => {
+                if let Err(rep) = editor.process_event(event) {
+                    let _ = cleanup();
+                    eprintln!("An error occurred when processing the event, Quitting");
+                    return Err(rep).change_context(ApplicationError);
+                }
+            }
             Err(TryRecvError::Closed) => {
                 eprintln!("InputSystem closed unexpectedly, Quitting");
                 break;

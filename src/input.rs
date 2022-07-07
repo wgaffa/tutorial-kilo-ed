@@ -23,6 +23,7 @@ pub enum InputEvent {
     CursorEvent(CursorEvent),
     InsertChar(char),
     Quit,
+    SaveBuffer,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,7 +67,8 @@ impl InputSystem {
             match_key!(KeyCode::PageDown) => Some(InputEvent::CursorEvent(CursorEvent::MoveBottom)),
             match_key!(KeyCode::Home) => Some(InputEvent::CursorEvent(CursorEvent::MoveBegin)),
             match_key!(KeyCode::End) => Some(InputEvent::CursorEvent(CursorEvent::MoveEnd)),
-            match_key!(KeyCode::Char(ch)) => Some(InputEvent::InsertChar(ch)),
+            match_key!(KeyCode::Char('s'), KeyModifiers::CONTROL) => Some(InputEvent::SaveBuffer),
+            match_key!(KeyCode::Char(ch), KeyModifiers::NONE) => Some(InputEvent::InsertChar(ch)),
             _ => None,
         };
 
