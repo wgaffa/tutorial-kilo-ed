@@ -226,12 +226,12 @@ impl Editor {
                 if let Err(_err) = self.buffer.save() {
                     self.set_status_message(format!(
                         "Can't save file {}",
-                        self.buffer.filename().unwrap_or(&String::from(crate::NO_NAME))
+                        self.buffer.filename_str().unwrap_or(crate::NO_NAME)
                     ));
                 }
                 self.set_status_message(format!(
                     "Saved {}",
-                    self.buffer.filename().unwrap_or(&String::from("??"))
+                    self.buffer.filename_str().unwrap_or("??")
                 ))
             }
             _ => {}

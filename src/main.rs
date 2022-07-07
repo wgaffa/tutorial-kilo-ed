@@ -116,7 +116,7 @@ fn setup_editor() -> crossterm::Result<Editor> {
     let (cols, rows) = terminal::size()?;
 
     let mut editor = Editor::new(cols, rows - 2);
-    editor.set_status_message("HELP: Ctrl+Q = quit");
+    editor.set_status_message("HELP: Ctrl-S = Save | Ctrl-Q = quit");
 
     Ok(editor)
 }
