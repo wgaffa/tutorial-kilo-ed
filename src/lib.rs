@@ -249,6 +249,10 @@ impl Editor {
             InputEvent::DeletePreviousChar => {
                 self.buffer.delete_char(&mut self.cursor);
             }
+            InputEvent::DeleteNextChar => {
+                self.cursor.right();
+                self.buffer.delete_char(&mut self.cursor);
+            }
             _ => {}
         }
 

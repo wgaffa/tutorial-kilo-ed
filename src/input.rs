@@ -25,6 +25,7 @@ pub enum InputEvent {
     Quit,
     SaveBuffer,
     DeletePreviousChar,
+    DeleteNextChar,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,7 +71,8 @@ impl InputSystem {
             match_key!(KeyCode::End) => Some(InputEvent::CursorEvent(CursorEvent::MoveEnd)),
             match_key!(KeyCode::Char('s'), KeyModifiers::CONTROL) => Some(InputEvent::SaveBuffer),
             match_key!(KeyCode::Char(ch), KeyModifiers::NONE) => Some(InputEvent::InsertChar(ch)),
-            match_key!(KeyCode::Delete) | match_key!(KeyCode::Backspace) => Some(InputEvent::DeletePreviousChar),
+            match_key!(KeyCode::Backspace) => Some(InputEvent::DeletePreviousChar),
+            match_key!(KeyCode::Delete) => Some(InputEvent::DeleteNextChar),
             _ => None,
         };
 
