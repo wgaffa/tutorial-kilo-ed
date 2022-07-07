@@ -1,6 +1,4 @@
-use unicode_width::UnicodeWidthStr;
-
-use crate::{text::ConsoleWidth, Position};
+use crate::{text::{ConsoleWidthChar, ConsoleWidthStr}, Position};
 
 pub trait Cursor {
     fn x(&self) -> u16;
@@ -107,10 +105,10 @@ impl HorizontalMovement for BoundedCursor {
                 // and need to get the new line from the buffer
                 let column_width = buf
                     .get(self.position.1 as usize)
-                    .map(|row| column_width(row.buffer()))
+                    .map(|row| row.buffer().column_width())
                     .unwrap_or(0);
 
-                self.position.0 = column_width;
+                self.position.0 = column_width as u16;
             } // We are not at the top, wrap
             (true, 0) => self.position.0 = 0, // We are at top and wrapped, keep at 0
             (false, _) => self.position.0 = value, // No wrapping needed, set the value
@@ -126,7 +124,7 @@ impl HorizontalMovement for BoundedCursor {
             .unwrap_or(1);
 
         let value = self.position.0.saturating_add(next_width);
-        let column_width = line.map(|row| column_width(row.buffer())).unwrap_or(0);
+        let column_width = line.map(|row| row.buffer().column_width()).unwrap_or(0) as u16;
 
         match (value > column_width, self.position.1) {
             (true, y) if y >= buf.len() as u16 => self.position.0 = column_width,
@@ -147,11 +145,8 @@ impl VerticalMovement for BoundedCursor {
         self.position.0 = self.position.0.min(
             buffer
                 .get(self.position.1 as usize)
-                .map(|row| {
-                    let tabs = row.buffer().chars().filter(|c| *c == '\t').count() as u16;
-                    tabs + row.buffer().width() as u16
-                })
-                .unwrap_or(1),
+                .map(|row| row.buffer().column_width())
+                .unwrap_or(1) as u16,
         );
     }
 
@@ -163,11 +158,8 @@ impl VerticalMovement for BoundedCursor {
         self.position.0 = self.position.0.min(
             buffer
                 .get(self.position.1 as usize)
-                .map(|row| {
-                    let tabs = row.buffer().chars().filter(|c| *c == '\t').count() as u16;
-                    tabs + row.buffer().width() as u16
-                })
-                .unwrap_or(1),
+                .map(|row| row.buffer().column_width())
+                .unwrap_or(1) as u16,
         );
     }
 }
@@ -182,8 +174,8 @@ impl LineMovement for BoundedCursor {
             .buffer
             .borrow()
             .get(self.position.1 as usize)
-            .map(|row| column_width(row.buffer()))
-            .unwrap_or(0);
+            .map(|row| row.buffer().column_width())
+            .unwrap_or(0) as u16;
         self.position.0 = last_column;
     }
 }
@@ -220,11 +212,6 @@ fn nth_position_width(buffer: &str, position: u16) -> u16 {
         })
         .last()
         .unwrap_or(1)
-}
-
-fn column_width(buffer: &str) -> u16 {
-    let tabs = buffer.chars().filter(|c| *c == '\t').count() as u16;
-    tabs + buffer.width() as u16
 }
 
 fn render_cursor(buffer: &str, cursor: usize, tabstop: usize) -> usize {
