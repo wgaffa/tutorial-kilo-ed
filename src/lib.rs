@@ -14,7 +14,7 @@ use crossterm::{
     style::{Attribute, Print, SetAttribute},
     terminal::{Clear, ClearType},
 };
-use error_stack::{Result, ResultExt};
+use error_stack::Result;
 
 use crate::{
     buffer::{Buffer, RowBufferRef},
@@ -33,6 +33,7 @@ pub mod text;
 
 const TAB_STOP: usize = 8;
 const SPACES: &str = "                                                                                                                                ";
+const NO_NAME: &str = "[No Name]";
 
 type ScreenRef = Rc<RefCell<Screen>>;
 
@@ -120,7 +121,6 @@ impl Editor {
     }
 
     fn draw_status_bar<W: Write>(&self, writer: &mut W) -> io::Result<()> {
-        const NO_NAME: &str = "[No Name]";
         let buf = self.buffer.buffer().borrow();
         let filename = self
             .buffer
@@ -222,13 +222,18 @@ impl Editor {
                 self.buffer.insert_char(ch, &self.cursor);
                 self.cursor.right()
             }
-            InputEvent::SaveBuffer => self
-                .buffer
-                .save()
-                .change_context(EditorEventError::SaveBuffer)
-                .attach_printable_lazy(|| {
-                    format!("Failed to save buffer to {:?}", self.buffer.filename())
-                })?,
+            InputEvent::SaveBuffer => {
+                if let Err(_err) = self.buffer.save() {
+                    self.set_status_message(format!(
+                        "Can't save file {}",
+                        self.buffer.filename().unwrap_or(&String::from(crate::NO_NAME))
+                    ));
+                }
+                self.set_status_message(format!(
+                    "Saved {}",
+                    self.buffer.filename().unwrap_or(&String::from("??"))
+                ))
+            }
             _ => {}
         }
 
