@@ -16,6 +16,7 @@ use crossterm::{
     terminal::{Clear, ClearType},
 };
 use error_stack::Result;
+use text::{ConsoleWidthStr, char_index};
 
 use crate::{
     buffer::{Buffer, RowBufferRef},
@@ -160,11 +161,13 @@ impl Editor {
         queue!(writer, Clear(ClearType::UntilNewLine))?;
         let message_len = self
             .status_message
-            .len()
+            .column_width()
             .min(self.screen.borrow().cols() as usize);
+
+        let index = char_index(message_len, &self.status_message);
         if let Ok(duration) = self.status_time.elapsed() {
             if duration.as_secs() < 5 {
-                queue!(writer, Print(&self.status_message[..message_len]))?;
+                queue!(writer, Print(&self.status_message[..index]))?;
             } else {
                 queue!(writer, Print(""))?;
             }
@@ -205,6 +208,10 @@ impl Editor {
     pub fn set_buffer(&mut self, buf: Buffer) {
         self.buffer = buf;
         self.cursor.set_buffer(Rc::clone(self.buffer.buffer()));
+    }
+
+    pub fn buffer(&self) -> &Buffer {
+        &self.buffer
     }
 
     pub fn process_event(&mut self, event: InputEvent) -> Result<(), EditorEventError> {

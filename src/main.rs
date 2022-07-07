@@ -8,11 +8,13 @@ use crossterm::{
 use error_stack::{IntoReport, ResultExt};
 
 use kilo_edit::{
-    buffer::Buffer,
+    buffer::{Buffer, BufferState},
     error::ApplicationError,
     input::{InputError, InputEvent, InputSystem},
     Editor,
 };
+
+const QUIT_TIMES: u8 = 3;
 
 fn main() -> error_stack::Result<(), ApplicationError> {
     startup()
@@ -37,6 +39,7 @@ fn main() -> error_stack::Result<(), ApplicationError> {
 
     let input = InputSystem::new(tx);
 
+    let mut quit_times = QUIT_TIMES;
     loop {
         if let Err(e) = editor.refresh(&mut io::stdout()) {
             cleanup()
@@ -76,7 +79,15 @@ fn main() -> error_stack::Result<(), ApplicationError> {
         }
 
         match rx.try_recv() {
-            Ok(InputEvent::Quit) => break,
+            Ok(InputEvent::Quit) => {
+                if editor.buffer().state() == BufferState::Modified && quit_times > 0 {
+                    editor.set_status_message(format!("⚠Warning!!⚠, File has unsaved changes. Press Ctrl-Q {quit_times} more times to quit."));
+                    quit_times -= 1;
+                    continue;
+                } else {
+                    break;
+                }
+            }
             Ok(event) => {
                 if let Err(rep) = editor.process_event(event) {
                     let _ = cleanup();
@@ -90,6 +101,7 @@ fn main() -> error_stack::Result<(), ApplicationError> {
             }
             _ => {}
         }
+        quit_times = QUIT_TIMES;
     }
 
     cleanup()
