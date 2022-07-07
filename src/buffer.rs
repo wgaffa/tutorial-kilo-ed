@@ -127,7 +127,8 @@ impl Buffer {
                 .borrow()
                 .iter()
                 .map(|row| row.buffer())
-                .collect::<String>();
+                .collect::<Vec<_>>()
+                .join("\n");
 
             fs::write(filename, &contents)
                 .report()
