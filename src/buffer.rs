@@ -142,6 +142,10 @@ impl Buffer {
         self.filename.as_ref()
     }
 
+    pub fn filename_str(&self) -> Option<&str> {
+        self.filename.as_deref()
+    }
+
     pub fn buffer(&self) -> &RowBufferRef {
         &self.buffer
     }
