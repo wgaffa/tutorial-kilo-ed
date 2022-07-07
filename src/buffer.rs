@@ -93,11 +93,19 @@ impl fmt::Display for BufferError {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BufferState {
+    Modified,
+    #[default]
+    Default,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Buffer {
     buffer: RowBufferRef,
     filename: Option<String>,
     cursor: BoundedCursor,
+    state: BufferState,
 }
 
 impl Buffer {
@@ -120,7 +128,7 @@ impl Buffer {
         Ok(me)
     }
 
-    pub fn save(&self) -> Result<(), BufferError> {
+    pub fn save(&mut self) -> Result<(), BufferError> {
         if let Some(filename) = &self.filename {
             let contents = self
                 .buffer
@@ -132,14 +140,14 @@ impl Buffer {
 
             fs::write(filename, &contents)
                 .report()
-                .change_context_lazy(|| BufferError::FailedToSave(filename.clone()))
+                .change_context_lazy(|| BufferError::FailedToSave(filename.clone()))?;
+
+            self.state = BufferState::Default;
         } else {
             error_stack::bail!(BufferError::NoFilename)
         }
-    }
 
-    pub fn filename(&self) -> Option<&String> {
-        self.filename.as_ref()
+        Ok(())
     }
 
     pub fn filename_str(&self) -> Option<&str> {
@@ -167,5 +175,11 @@ impl Buffer {
         let row = &mut buffer[cursor.y() as usize];
         let index = crate::text::char_index(cursor.x() as usize, row.buffer());
         row.insert(index, ch);
+
+        self.state = BufferState::Modified;
+    }
+
+    pub fn state(&self) -> BufferState {
+        self.state
     }
 }

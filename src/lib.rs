@@ -8,6 +8,7 @@ use std::{
     time::SystemTime,
 };
 
+use buffer::BufferState;
 use crossterm::{
     cursor::{Hide, MoveTo, Show},
     queue,
@@ -124,12 +125,16 @@ impl Editor {
         let buf = self.buffer.buffer().borrow();
         let filename = self
             .buffer
-            .filename()
+            .filename_str()
             .map(|x| &x[..x.len().min(20)])
             .unwrap_or(NO_NAME);
 
         let rows = buf.len();
-        let left = format!("{} - {} lines", filename, rows);
+        let modified = match self.buffer.state() {
+            BufferState::Modified => "(modified)",
+            _ => "",
+        };
+        let left = format!("{filename} - {rows} lines {modified}");
         let right = format!("{}/{}", self.cursor.y() + 1, rows);
 
         let fill_length =
