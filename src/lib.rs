@@ -16,9 +16,9 @@ use crossterm::{
 };
 
 use crate::{
+    buffer::{Buffer, RowBufferRef},
     cursor::*,
     input::{CursorEvent, InputEvent},
-    buffer::{Buffer, RowBufferRef},
     screen::Screen,
 };
 
@@ -29,7 +29,6 @@ pub mod input;
 pub mod macros;
 pub mod screen;
 pub mod text;
-
 
 const TAB_STOP: usize = 8;
 const SPACES: &str = "                                                                                                                                ";
@@ -203,7 +202,10 @@ impl Editor {
             cursor!(MoveBottom) => self.cursor.bottom(),
             cursor!(MoveBegin) => self.cursor.begin(),
             cursor!(MoveEnd) => self.cursor.end(),
-            InputEvent::InsertChar(ch) => self.buffer.insert_char(ch),
+            InputEvent::InsertChar(ch) => {
+                self.buffer.insert_char(ch, &self.cursor);
+                self.cursor.right()
+            }
             _ => {}
         }
     }

@@ -3,7 +3,7 @@ use std::{borrow::Cow, cell::RefCell, fmt, fs, path::Path, rc::Rc};
 use error_stack::{IntoReport, Result, ResultExt};
 
 use crate::{
-    cursor::{BoundedCursor, Cursor, HorizontalMovement},
+    cursor::{BoundedCursor, Cursor},
     SPACES,
     TAB_STOP,
 };
@@ -132,23 +132,14 @@ impl Buffer {
         std::mem::take(&mut self.cursor)
     }
 
-    pub fn insert_char(&mut self, ch: char) {
-        // We need to to get exclusive access to self.rows here,
-        // but self.cursor movement also has to get a references to row and
-        // this is why we need to make sure to drop the exclusive access before cursor tries
-        // to access it.
-        {
-            let mut buffer = self.buffer.borrow_mut();
-            if self.cursor.y() as usize == buffer.len() {
-                buffer.push(Row::new(""));
-            }
-
-            let row = &mut buffer[self.cursor.y() as usize];
-            let index = crate::text::char_index(self.cursor.x() as usize, row.buffer());
-            row.insert(index, ch);
+    pub fn insert_char<T: Cursor>(&mut self, ch: char, cursor: &T) {
+        let mut buffer = self.buffer.borrow_mut();
+        if cursor.y() as usize == buffer.len() {
+            buffer.push(Row::new(""));
         }
 
-        // Cursor borrows the buffer as mutable here as well
-        self.cursor.right();
+        let row = &mut buffer[cursor.y() as usize];
+        let index = crate::text::char_index(cursor.x() as usize, row.buffer());
+        row.insert(index, ch);
     }
 }
