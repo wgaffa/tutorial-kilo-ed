@@ -42,7 +42,7 @@ impl Row {
     }
 
     pub fn render_buffer(&self) -> Cow<str> {
-        for (i, ch) in self.buffer.chars().enumerate() {
+        for (i, ch) in self.buffer.char_indices() {
             if ch == '\t' {
                 let mut buf = String::with_capacity(self.buffer.len());
                 buf.push_str(&self.buffer[..i]);
